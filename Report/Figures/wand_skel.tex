@@ -1,0 +1,27 @@
+\begin{taplfigureT}{label=wand:skel, caption={Skeleton of Wand's type inference algorithm.}}
+
+\quad
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l r p{7cm}}
+\textbf{Input:}          & \multicolumn{2}{l}{Term $t_{0}$} \\
+                         &            & \\
+\textbf{Initialization:} & $E$ = & $\emptyset$ \\
+                         & $G$ = & $\{ (\Gamma_{0},t_{0},\tau_{0}) \}$,
+                                    where $\tau_{0}$ is a type variable
+                                    and $\Gamma_{0}$ maps the free
+                                    variables of $t_{0}$ to other distinct
+                                    type variables \\
+\end{tabular}
+
+\quad
+\setlength{\tabcolsep}{1pt}
+\begin{tabular}{l l p{7cm}}
+\textbf{Loop:} \quad\quad\quad\quad\quad
+& \multicolumn{2}{l}{If $G = \emptyset$ then halt and return $E$} \\
+	
+& Otherwise: & choose and delete a subgoal from $G$ and add to $E$
+               and $G$ new verification conditions and subgoals as
+               specified in an action table \\
+\end{tabular}
+
+\end{taplfigureT}

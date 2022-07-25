@@ -1,0 +1,39 @@
+\section{Introduction}
+
+Type systems are an essential high level abstraction of modern
+programming languages and type checkers are standard components of
+their compilers. A language's type system needs to be fitted with a
+formal description to allow the language designer to reason about
+certain formal aspects of the system, e.g., well-formedness, progress,
+and preservation.
+
+Questions about the relationship between a type system's formal
+description and its implementation have been addressed in existing
+work, ranging from mutual consistency between description and
+implementation~\cite{Levin2003,Dijkstra2006} to the development of
+specification techniques suitable for generating type
+checkers~\cite{Gast04}. Yet the question remains if the standard,
+text-book way to formalize type systems -- inference rules over type
+judgements -- can be used to derive or generate type checkers.
+
+In this paper we focus on this question and show that a well known
+extension of the standard way to formalize type systems, namely the
+extension with constraints, can be used to derive type checking
+functionality. We develop an abstract type checking framework
+utilizing the constraint-based flavor of the type system and present
+the design and implementation of a \textsc{Haskell} library which
+employs our developed ideas and algorithms for deriving type checkers.
+
+The remainder of this report proceeds as follows. In section 2, we
+give a precise overview of constraint-based type systems. Sections 3
+and 4 present our two algorithms for generating and solving
+constraints. Section 5 describes the design and implementation of the
+library. Section 6 and 7 employ our framework to define type checkers
+for the languages \textsc{Mini-ML} and \textsc{FeatherweightJava} to
+give the reader a better understanding of the usage of the
+library. Section 8 presents a framework for visualizing the internals
+of the derived type checkers. Sections 9 and 10 describe related work
+and discuss some open questions regarding the implementation.
+
+The implementation of our library, its documentation, and all example
+type checkers are available from~\cite{TypeCheckLib}.

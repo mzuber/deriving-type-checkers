@@ -1,0 +1,50 @@
+\renewcommand{\thesection}{Appendix \Alph{section}:}
+\setcounter{section}{0}
+
+\section{Default Abstract Syntax}
+
+For rapid prototyping of type checking functionality the libary
+provides abstract syntax ready to use with our type checking
+framework. This abstract syntax consists of terms, definitions, and
+combiners. Terms allow the user to encode variables, constants,
+characters, binder, and tagged combiner. Definitions bind identifier
+to terms and container encapsulate sub-containers and definitions.
+All data structures provide corresponding meta-level elements and
+allow the user to define sets, sequences, and meta-level functions
+over these elements.
+
+\bigskip
+\begin{lstlisting}
+data Tag = Let                   -- Let binding
+         | LetRec                -- Recursive let binding
+         | App                   -- Application
+         | Abs                   -- Lambda abstraction
+         | IfThenElse            -- Conditional
+         | Fix                   -- Fixpoint combinator
+         | Tuple                 -- n-ary tuple
+         | Tag String            -- 'String'-based tag
+
+data Term = Nil                     -- Empty term
+          | Var    Ide              -- Variable
+          | Const  Integer          -- Constant
+          | Char   Char             -- Character
+          | Bind   Ide Term         -- Object level binder
+          | K      Tag Int [Term]   -- Tagged combiner
+          | TSeq   (Sequence Term)  -- Sequence of terms
+          | TSet   (Set Term)       -- Set of terms
+          | TFun   (MetaFun Term)   -- Embedded function
+          | MConst String           -- Meta-level constant
+          | MChar  String           -- Meta-level character
+          | MTerm  String           -- Meta-level term
+
+data Def = Def   Ide Term        -- Definition
+         | DSeq  (Sequence Def)  -- Sequence of definitions
+         | DSet  (Set Def)       -- Set of definitions
+         | DFun  (MetaFun Def)   -- Meta-level function
+         | MDef  String          -- Meta-level definition
+
+data C = C    [C] [Def]          -- Container
+       | CSeq (Sequence C)       -- Sequence over container
+       | CSet (Set C)            -- Set over container
+       | MC   String             -- Meta-level container
+\end{lstlisting}

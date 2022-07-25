@@ -1,0 +1,68 @@
+\begin{taplfigure}{label={miniml:typesystem},
+                   caption={ A constraint-based inference system for
+                            \textsc{Mini-ML} }}
+
+\textbf{Simple Lambda}
+
+\vspace{-1em}
+\infrule[Var] { \Gamma (x) \succeq T}
+              { \Gamma \vdash x : T }
+              
+\infrule[Abs] { \Gamma ,x:T_{1} \vdash e : T_{2} \andalso
+                T = T_{1} \rightarrow T_{2} }
+              { \Gamma \vdash \mathtt{\lambda}\, x \texttt{.} e : T }
+
+\infrule[App] { \Gamma \vdash f : T_{1} \andalso \Gamma \vdash e : T_{2}
+                \andalso T_{1} = T_{2} \rightarrow T }
+              { \Gamma \vdash f\, e : T }
+
+\vspace{-1ex}
+\textbf{Base Types}
+
+\vspace{-1em}
+\infrule[Int] { T = \texttt{Int} }
+              { \Gamma \vdash n : T\ ,\ n \in \mathbb{Z} }
+
+\infrule[Bool] { T = \texttt{Bool} }
+               { \Gamma \vdash b : T\ ,\ b \in \mathbb{B} }
+
+\infrule[Arith] { T = \texttt{Int} \rightarrow (\texttt{Int} \rightarrow \texttt{Int}) }
+                { \Gamma \vdash \oplus : T\ ,\ \oplus \in
+                  \{\texttt{+,-,*,/} \} }
+
+\infrule[Compare] { T = \texttt{Int} \rightarrow (\texttt{Int} \rightarrow \texttt{Bool}) }
+                  { \Gamma \vdash \texttt{==} : T }
+
+\vspace{-1ex}
+\textbf{Extensions}
+
+\vspace{-1em}
+\infrule[Cond] { \Gamma \vdash e_1 : T_1 \andalso
+                 \Gamma \vdash e_2 : T_2 \andalso
+                 \Gamma \vdash e_3 : T_3 \\
+                 T_1 = \mathtt{bool} \andalso T = T_2 \andalso T = T_3 }
+               { \Gamma \vdash\ \mathtt{if}\ e_1\
+                 \mathtt{then}\ e_2\ \mathtt{else}\ e_3 : T }
+
+\infrule[Pair] { \Gamma \vdash e_1 : T_1 \andalso
+                 \Gamma \vdash e_2 : T_2 \andalso
+                 T = T_1 \times T_2 }
+               { \Gamma \vdash (e_1,e_2) : T }
+
+\infrule[Let] { \Gamma \vdash e_1 : T_1 \andalso
+                \Gamma,x:gen(\Gamma,T_1) \vdash e_2 : T_2
+                \andalso  T = T_2 }
+              { \Gamma \vdash \texttt{let}\ x\, \texttt{=}\, e_1\
+                \texttt{in}\ e_2 : T }
+
+\infrule[Rec-let] { \Gamma \vdash\ \mathtt{let}\ x =\ \mathtt{fix}\;
+                    (\lambda x.e_1)\ \mathtt{in}\ e_2 : T_2
+                    \andalso T = T_2 }
+                  { \Gamma \vdash\ \mathtt{letrec}\ x = e_1\
+                    \mathtt{in}\ e_2 : T }
+
+\infrule[Fix] { \Gamma \vdash f : T_1 \andalso
+                T_1 = T \rightarrow T }
+              { \Gamma \vdash\ \mathtt{fix}\ f : T }
+              
+\end{taplfigure}

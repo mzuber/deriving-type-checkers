@@ -1,0 +1,71 @@
+\section{Constraint-based Type Systems}
+
+Type systems provide a lightweight formal method to reason about
+programs and therefore need to be formalized in an adequate manner. A
+typical way to accomplish this task is to formulate type systems by
+inference rules.
+
+Following notion from proof theory a typing rule consists of a
+sequence of premises $P_1\, ...\, P_n$ and a conclusion $C$. Each
+$P_i$ and $C$ is a typing judgement and a rule is written with a
+horizontal line separating the premises from the conclusion.  Typing
+judgements can be modeled as a ternary relation
+\begin{center}
+  $\Gamma \vdash e : T$
+\end{center}
+between a context $\Gamma$, an expression $e$, and a type
+$T$~\cite{DamasMilner82}. The turnstile $\vdash$ denotes that the type
+$T$ can be derived for the expression $e$ under the assumptions given
+by the context $\Gamma$.  The judgements of rules may contain
+variables at meta level which represent an arbitrary object of a given
+class. A rule instance is a rule in which all meta variables have been
+substituted with concrete object-level pendants.
+
+In this setting, a deduction (or derivation) is a tree of rule
+instances labeled with judgements. Each node is the conclusion of a
+rule instance and its children are the premises of the same rule
+instance. Thus a typing relation $\Gamma \vdash e : T$ holds if there
+exists a deduction of that judgement under the given set of typing
+rules.
+
+This approach to formalize type systems can be extended in various
+ways, one particular -- the extension with constraints -- will be used
+as the underlying formalism for our approach to derive type check
+functionality from a type system's specification.  In a type
+deduction step as described above it is checked whether all typing
+relations formulated in the premises of the instantiated rule
+hold. Thus in each inference step a certain set of constraints (the
+requirement that a typing relation holds can be seen as a constraint)
+is generated and directly checked.  Given a constraint-based setting,
+instead of checking the generated constraints directly they are
+collected for later consideration. To capture this idea our notation
+for judgements in deduction rules needs to be accommodated.
+A constraint typing judgement can be modeled as a ternary relation
+extended with a constraint set
+\begin{center}
+  $\Gamma \vdash e : T\ |\ C$
+\end{center}
+and can be read as ``expression $e$ has type $T$ under the assumptions
+$\Gamma$ whenever the constraints in $C$ are
+satisfied''~\cite{Tapl}. In this constraint-based abstraction type
+checking is separated in two phases, constraint generation and
+constraint solving. A traversal of an abstract syntax tree
+generates a set of constraints and the program is well typed if and
+only if these constraints have a unique solution -- type checking is
+reduced to constraint solving.\\
+For a better understanding of this extension let us consider the
+constraint-based typing rules for the simply typed lambda calculus
+given in Fig.~\ref{fig:simpletypes}. Especially the typing rules for
+$\lambda$-abstraction and application illustrate the benefit of a
+constraint-based approach in comparison to basic inference rules:
+Using constraints as an abstraction allows the designer of a type
+system to formulate the essential consistency conditions that the type
+system imposes on the language~\cite{Gast04}.
+
+Additionally, a constraint-based approach provides a certain
+flexibility regarding its expressiveness: the formalism can be
+custom-tailored to the type system to be defined by choosing the right
+set of constraint domains while still being strong enough to allow us
+to reason about the system in terms of progress and preservation.
+
+\input{Figures/simple_lambda}

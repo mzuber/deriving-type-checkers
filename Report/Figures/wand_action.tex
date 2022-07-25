@@ -1,0 +1,24 @@
+\begin{taplfigure}{label=wand:action, caption={Action table for the typed lambda calculus.}}
+
+\quad Let $s$ be the selected subgoal.
+
+\bigskip\quad
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{ l l p{7cm}}
+\textbf{Case 1:} & $s = (\Gamma,\, x,\, t)$
+                 & Generate the equation $t = \Gamma (x)$.\\
+	
+\textbf{Case 2:} & $s = (\Gamma,\, (f)\, e,\, t)$
+                 & Let $\tau_1$ be a fresh type variable that
+                   appears nowhere else in $(E,\, G)$. Then generate
+                   the subgoals $(\Gamma,\, f,\, \tau_1 \rightarrow t)$
+                   and $(\Gamma,\, e,\, \tau_1)$.\\
+	                                                    
+\textbf{Case 3:} & $s = (\Gamma,\, \lambda x.\, e,\, t)$
+                 & Let $\tau_1$ and $\tau_2$ be fresh type variables.
+                  Generate the equation $t = \tau_1 \rightarrow \tau_2$
+                  and the subgoal \mbox{$((\Gamma,x:\tau_1),\, e,\, \tau_2)$}.\\
+
+\end{tabular}
+
+\end{taplfigure}

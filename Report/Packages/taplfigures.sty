@@ -1,0 +1,86 @@
+% taplfigures.sty
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{taplfigures}[2011/10/25 Figures styled as in BCP's "Types and Programming Languages"]
+
+\RequirePackage{calc}
+\RequirePackage{ifthen}
+\RequirePackage{keyval}
+
+
+% figure with placement specifier 'here'
+% keys: label, caption, left, right
+\makeatletter
+\newenvironment{taplfigure}[1]{%
+  \newcommand{\hseprule}{%
+    \vspace{4pt}\hrule height 0.165pt depth 0.165pt width \linewidth\relax\vspace{4pt}
+  }%\newcommand{\hseprule}
+  \newcommand{\sepheader}[1]{%
+    \medskip\textit{##1}\par\medskip
+  }%\newcommand{\sepheader}
+  \newcommand{\lefttext}{}
+  \newcommand{\righttext}{}
+  \newcommand{\lab}{}
+  \newcommand{\captiontext}{}
+  \define@key{taplfigure}{left}{\renewcommand{\lefttext}{\textit{##1}}}
+  \define@key{taplfigure}{right}{\renewcommand{\righttext}{\textit{##1}}}
+  \define@key{taplfigure}{label}{\renewcommand{\lab}{##1}}
+  \define@key{taplfigure}{caption}{\renewcommand{\captiontext}{##1}}
+  \setkeys{taplfigure}{#1}
+  \def\capt{%
+    \caption{\captiontext}
+    \ifthenelse{\equal{\lab}{}}{}{\label{fig:\lab}}
+  }
+  \begin{figure}[H]%
+    \lefttext\hfill\righttext\par
+    \rule{1pt}{2mm}\rule[2mm-1pt]{\linewidth-2pt}{1pt}\rule{1pt}{2mm}\par
+    \smallskip
+    \hspace{4pt}%
+    \begin{minipage}{\linewidth-8pt}
+}{%
+    \end{minipage}%
+    \medskip\par
+    \rule{1pt}{2mm}\rule{\linewidth-2pt}{1pt}\rule{1pt}{2mm}%    
+    \vspace{-3mm}\capt%
+  \end{figure}
+}%\newenvironment{taplfigure}
+
+
+
+
+% figure with placement specifier 'top'
+% keys: label, caption, left, right
+\makeatletter
+\newenvironment{taplfigureT}[1]{%
+  \newcommand{\hseprule}{%
+    \vspace{4pt}\hrule height 0.165pt depth 0.165pt width \linewidth\relax\vspace{4pt}
+  }%\newcommand{\hseprule}
+  \newcommand{\sepheader}[1]{%
+    \medskip\textit{##1}\par\medskip
+  }%\newcommand{\sepheader}
+  \newcommand{\lefttext}{}
+  \newcommand{\righttext}{}
+  \newcommand{\lab}{}
+  \newcommand{\captiontext}{}
+  \define@key{taplfigureT}{left}{\renewcommand{\lefttext}{\textit{##1}}}
+  \define@key{taplfigureT}{right}{\renewcommand{\righttext}{\textit{##1}}}
+  \define@key{taplfigureT}{label}{\renewcommand{\lab}{##1}}
+  \define@key{taplfigureT}{caption}{\renewcommand{\captiontext}{##1}}
+  \setkeys{taplfigureT}{#1}
+  \def\capt{%
+    \caption{\captiontext}
+    \ifthenelse{\equal{\lab}{}}{}{\label{fig:\lab}}
+  }
+  \begin{figure}[t]%
+    \lefttext\hfill\righttext\par
+    \rule{1pt}{2mm}\rule[2mm-1pt]{\linewidth-2pt}{1pt}\rule{1pt}{2mm}\par
+    \smallskip
+    \hspace{4pt}%
+    \begin{minipage}{\linewidth-8pt}
+}{%
+    \end{minipage}%
+    \medskip\par
+    \rule{1pt}{2mm}\rule{\linewidth-2pt}{1pt}\rule{1pt}{2mm}%    
+    \vspace{-3mm}\capt%
+  \end{figure}
+}%\newenvironment{taplfigureT}

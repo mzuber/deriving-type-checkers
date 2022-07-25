@@ -1,0 +1,334 @@
+\section{A Type Checker for Mini-ML}
+
+\textsc{Mini-ML} was developed in \cite{MiniML86} in order to present
+a formal description of the central part of the \textsc{ML} language
+in natural semantics. \textsc{Mini-ML} is a strongly restricted
+\textsc{ML}, consisting basically of the simply typed lambda calculus
+extended with the base types \texttt{int} and \texttt{bool}, pairs,
+conditionals and recursive, polymorphic let, and can therefor be seen
+as a core calculus for functional programming languages.
+
+\subsection{Syntax}
+
+Since \textsc{Mini-ML} is just an extended, simply Curry-style typed
+lambda calculus, the syntax definition follows the regular, recursive
+definition of the untyped lambda calculus in a straightforward manner:
+
+\bigskip Let $\mathcal{V}$ be a countable set of identifiers
+(variables), $\mathbb{B} = \{ true,false \}$ the set of boolean values
+and $\mathbb{Z}$ the set of integers. The set of \textsc{Mini-ML}
+terms is the smallest set $\mathcal{T}_{Mini-ML}$ such that
+\begin{enumerate}
+\item x $\in \mathcal{T}_{Mini-ML}$ for every x $\in \mathcal{V}$
+\item b $\in \mathcal{T}_{Mini-ML}$ for every b $\in \mathbb{B}$
+\item n $\in \mathcal{T}_{Mini-ML}$ for every n $\in \mathbb{Z}$
+\item e $\in \mathcal{T}_{Mini-ML}$ and x $\in \mathcal{V} \Rightarrow
+  \lambda\, $x.e $\in \mathcal{T}_{Mini-ML}$
+\item e$_{1}$, e$_{2} \in \mathcal{T}_{Mini-ML} \Rightarrow$ (e$_{1}$)
+  e$_{2} \in \mathcal{T}_{Mini-ML}$
+\item e$_{1}$, e$_{2} \in \mathcal{T}_{Mini-ML} \Rightarrow$ (e$_{1}$,
+  e$_{2}$) $\in \mathcal{T}_{Mini-ML}$
+\item e$_{1}$, e$_{2}$, e$_{3} \in \mathcal{T}_{Mini-ML} \Rightarrow$
+  \texttt{if} e$_{1}$ \texttt{then} e$_{2}$ \texttt{else} e$_{3} \in
+  \mathcal{T}_{Mini-ML}$
+\item e$_{1}$, e$_{2} \in \mathcal{T}_{Mini-ML}$ and x $\in
+  \mathcal{V} \Rightarrow$ \texttt{let} x \texttt{=} e$_{1}$
+  \texttt{in} e$_{2} \in \mathcal{T}_{Mini-ML}$
+\item e$_{1}$, e$_{2} \in \mathcal{T}_{Mini-ML}$ and f, x $\in
+  \mathcal{V} \Rightarrow$ \texttt{letrec} f \texttt{=} $\lambda\,
+  $x.e$_{1}$ \texttt{in} e$_{2} \in \mathcal{T}_{Mini-ML}$
+\item e $\in \mathcal{T}_{Mini-ML} \Rightarrow$ \texttt{fix} e $\in
+  \mathcal{T}_{Mini-ML}$
+\end{enumerate}
+
+\subsection{Encoding}
+
+As part of our first example type checker we want to utilize the
+library's default abstract syntax (see Appendix A) to encode
+\textsc{Mini-ML} terms and the remainder of this section is used to
+describe the translation accordingly.
+
+\bigskip
+
+Variables and constants are obviously encoded in their corresponding
+constructors. All the other syntactical features of \textsc{Mini-ML}
+are interpreted as combinations of terms and therefore are encoded in
+a combiner:
+
+\begin{description}
+\item[Lambda abstraction] An untyped lambda abstraction combines a
+  variable with an expression: $\lambda x.\, e \Rightarrow$
+  \verb|K Abs 2 [Var (Ide``x''), e]|.  A typed lambda abstraction (not
+  part of \textsc{Mini-ML}) will be encoded in a similar way,
+  additionally binding a type to the variable: $\lambda x:T.\, e
+  \Rightarrow$\\ \verb|K Abs 2 [Bind (Ide ``T'') (Var (Ide ``x'')), e]|.
+\item[Application] An application in the simply typed lambda calculus
+  applies an expression to another one and can therefor be seen as a
+  combination of terms, too: $(f)\, e \Rightarrow$ \verb|K App 2 [f, e]|.
+\item[Pairs] Being two-ary tuples, pairs combine two \textsc{Mini-ML}
+  expressions: $(e_{1},e_{2}) \Rightarrow$ \verb|K Tuple 2 [e1, e2]|.
+\item[Let] A let-binding combines a variable with two expressions:
+  $\mathtt{let}\ x = e_{1}\ \mathtt{in}\ e_{2} \Rightarrow$
+  \verb|K Let 3 [Var (Ide ``x''), e1, e2]|.  A recursive let is
+  encoded in the same manner, but uses a different tag
+  (\texttt{LetRec}).
+\item[Conditionals] \textsc{Mini-ML}'s syntax provides conditionals
+  which range over three expressions and will be encoded in a
+  combiner: $\mathtt{if}\ c\ \mathtt{then}\ e_{1}\ \mathtt{else}\
+  e_{2} \Rightarrow$ \verb|K IfThenElse 3 [c, e1, e2]|.
+\end{description}
+
+% typing rules
+\subsection{Type system}
+
+The type rules for the extended, simply typed lambda calculus
+presented above will follow standard notations \cite{Tapl}. Since a
+constraint-based type system is desired, the typing constraints
+arising in each rule will be explicitly denotated according to the
+scheme presented in Sec.~\ref{sec:inference_rules}.
+
+But before being able to state \textsc{Mini-ML}'s type system we need
+to introduce the notion of type schemes in order to define adequate
+type rules for polymorphic \texttt{let} bindings.
+
+\bigskip\noindent
+\textbf{Definition 1.3.1}
+A type scheme
+$s = \forall \alpha_1 .\ ...\ \forall \alpha_n . \tau$
+has a generic instance
+$t = \forall \beta_1 .\ ...\ \forall \beta_n . \tau'$ ,
+written $s \succeq t$, if there exists a substitution $\sigma$
+such that
+\begin{center}
+$\tau' = \sigma (\tau)$ with $dom(\sigma) \subseteq
+                             \{\alpha_1, ... , \alpha_n\}$
+\end{center}
+\noindent
+and all $\beta_i$ are not free in $\sigma$. If $s$ and $t$ are types
+rather than type schemes, then $s \succeq t$ implies $s = t$.
+
+\bigskip\noindent
+\textbf{Definition 1.3.2} To generalize a type over its free type
+variables we define
+\[ gen(\Gamma, \tau) =
+\begin{cases}
+\forall \alpha_1 .\ ...\
+\forall \alpha_n . \tau & FV(\tau) \setminus FV(\Gamma) =
+                          \{\alpha_1, ... , \alpha_n\} \\
+\tau                    & FV(\tau) \setminus FV(\Gamma) = \emptyset
+\end{cases} \]
+
+These two auxiliary functions can be implemented in a straight forward
+manner using the library's default type data structure:
+
+\begin{lstlisting}
+(>=) :: Ty -> Ty -> Maybe (Bool, Substitution)
+(MT _) >= _      = Nothing
+_      >= (MT _) = Nothing
+-- check if second type scheme is a
+-- generic instance of the first one
+(TS tvs1 t1) >= (TS tvs2 t2) =
+    let (b1,o) = unify t1 t2
+        b2     = fromList (dom o) `isSubsetOf` fromList tvs1
+        b3     = null (bv t2 `intersection` fv t1)
+    in Just (b1 && b2 && b3, empty)
+-- or instantiate type scheme
+(TS tvs t1) >= t2 =
+    let f tv s = insert tv ((TV . Ide) (freshName "T")) s 
+        o      = foldr f empty tvs
+        t1'    = apply o t1
+    in t1' >= t2
+t1 >= t2@(TS _ _) = t2 >= t1
+-- otherwise, unify types
+t1 >= t2 = Just (unify t1 t2)
+
+
+gen :: Context -> Ty -> Maybe Ty
+gen (MCtx _) _ = Nothing
+gen _ (MT _)   = Nothing
+gen ctx ty  = let tvs  = fv ty `difference` fv ctx
+                  tvs' = toList tvs
+              in if null tvs then Just ty
+                 else Just (TS tvs' ty)
+\end{lstlisting}
+
+Given this notion of type schemes, a constraint-based inference system
+for \textsc{Mini-ML} expressions can be stated in a straightforward
+manner as given in Fig.~6.
+
+Having defined a suitable inference system for \textsc{Mini-ML} we now
+want to use the remainder of this section to describe the encoding of
+the deduction rules given above using our type checker library. To do
+so, let us define some meta-level expressions, types, and contexts
+used commonly in the following type rules:
+\begin{lstlisting}
+ctx = MCtx "Gamma" ; x  = MIde "x"   ; n  = MConst "n"
+e1  = MTerm "e"    ; e1 = MTerm "e1" ; e2 = MTerm "e2"
+e3  = MTerm "e3"   ; f  = MTerm "f"  ; t  = MT "T"
+t1  = MT "T1"      ; t2 = MT "T2"    ; t3 = MT "T3"
+\end{lstlisting}
+
+\input{Figures/miniml}
+
+Secondly, we need to lift the two auxiliary functions to the
+meta level to be able to use them in the to be defined deduction
+rules, i.e.~,
+
+\begin{lstlisting}
+gen ctx ty = TyFun (MF "gen" (uncurry Rule.gen) (ctx,ty))
+
+t1 >= t2 = Constraint (MF ">=" (uncurry Type.>=) (t1,t2))
+                      (mkErr "Generic instance check failed.")
+\end{lstlisting}
+
+For all of our type rules we will use a default, non-specific error
+message:
+\begin{lstlisting}
+err = mkErr "An error has occurred."
+\end{lstlisting}
+A more sophisticated approach for error handling will be described
+when defining a type checker for \textsc{FJ} in the next
+section. Given all the needed meta-level elements we now can implement
+\textsc{Mini-ML}'s type system using the data structures of our
+library.
+
+\paragraph{Variables} The typing rule for variable lookup utilizes our
+notion for calls to auxiliary functions in deduction rules to encode
+the context lookup (\texttt{!}) and the check, if the given type is a
+generic instance of the inferred one (\texttt{>=}).
+\begin{lstlisting}
+var :: Rule
+var = Rule [ t1 =:= ctx ! Var x <|> err,
+             (t1 >= t) <|> err ]
+           ( ctx |- Var x <:> t )
+\end{lstlisting}
+
+\paragraph{Lambda Abstraction} The typing rule for
+$\lambda$-abstraction uses a meta-level function to insert a typing
+into the context.
+\begin{lstlisting}
+abs :: Rule
+abs = Rule [ ctx' |- e <:> t2 , t =:= (t1 ->: t2) <|> err ]
+           ( ctx |- K Abs 2 [Var x, e] <:> t )
+      where
+        ctx' = mInsertCtx (Var x) t1 ctx
+\end{lstlisting}
+
+\paragraph{Application} The inference rule for applications can be
+encoded in a straightforward manner using our library's combinators.
+\begin{lstlisting}
+app :: Rule
+app = Rule [ ctx |- f <:> t1 , ctx |- e <:> t2,
+             t1 =:= (t2 ->: t) <|> err ]
+           ( ctx |- (K App 2 [f,e]) <:> t )
+\end{lstlisting}
+
+\paragraph{Base Types} The deduction rules for the base types
+\texttt{int} and \texttt{bool} as well as the build-in functionality
+on these two types can be defined as following:
+
+\newpage
+
+\begin{lstlisting}
+int  = mkT "int"
+bool = mkT "bool"
+
+true = Rule [ t =:= bool <|> err ]
+            ( ctx |- Var (Ide "true") <:> t )
+
+false = Rule [ t =:= bool <|> err ]
+             ( ctx |- Var (Ide "false") <:> t )
+
+const = Rule [ t =:= int <|> err ]
+             ( ctx |- n <:> t )
+
+add = Rule [ t =:= (int ->: (int ->: int)) <|> err ]
+           ( ctx |- Var (Ide "+") <:> t )
+
+sub = Rule [ t =:= (int ->: (int ->: int)) <|> err ]
+           ( ctx |- Var (Ide "-") <:> t )
+
+mul = Rule [ t =:= (int ->: (int ->: int)) <|> err ]
+           ( ctx |- Var (Ide "*") <:> t )
+
+div = Rule [ t =:= (int ->: (int ->: int)) <|> err ]
+           ( ctx |- Var (Ide "/") <:> t )
+
+eqi = Rule [ t =:= (int ->: (int ->: bool)) <|> err ]
+           ( ctx |- Var (Ide "==") <:> t )
+\end{lstlisting}
+
+\paragraph{Conditionals} The inference rule for conditionals can be
+encoded in a straightforward manner using our library's combinators.
+\begin{lstlisting}
+cond :: Rule
+cond = Rule [ ctx |- e1 <:> t1, ctx |- e2 <:> t2
+            , ctx |- e3 <:> t3, t1 =:= bool <|> err
+            , t =:= t2 <|> err, t =:= t3 <|> err ]
+            ( ctx |- (K IfThenElse 3 [e1,e2,e3]) <:> t )
+\end{lstlisting}
+
+\paragraph{Pairs} The typing rule for pairs can again be encoded in a
+quite elegant way using our library's combinators.
+
+\begin{lstlisting}
+pair :: Rule
+pair = Rule [ ctx |- e1 <:> t1 , ctx |- e2 <:> t2,
+              t =:= (t1 ** t2) <|> err ]
+            ( ctx |- (K Tuple 2 [e1,e2]) <:> t )
+\end{lstlisting}
+
+\paragraph{Let-Bindings} The typing rules for polymorphic and
+recursive let-bindings utilize our notion for calls to auxiliary
+functions in deduction rules to encode the insertion of a typing into
+a context as well as the generation of a type scheme.
+\begin{lstlisting}
+letpoly :: Rule
+letpoly = Rule [ ctx |- e1 <:> t1, t2 =:= gen ctx t1 <|> err
+               , mInsertCtx (Var x) t2 ctx |- e2 <:> t3
+               , t =:= t3 <|> err ]
+               ( ctx |- (K Let 3 [Var x,e1,e2]) <:> t )
+
+
+letrec :: Rule
+letrec = Rule [ ctx |- (K Let 3 [Var x, fix, e2]) <:> t2,
+                t =:= t2 <|> err ]
+              ( ctx |- (K LetRec 3 [Var x, e1, e2]) <:> t )
+         where
+           fix = K Fix 1 [K Abs 2 [Var x, e1]]
+
+
+fix :: Rule
+fix = Rule [ ctx |- f <:> t1 , t1 =:= (t ->: t) <|> err ]
+           ( ctx |- (K Fix 1 [f]) <:> t )
+\end{lstlisting}
+
+\subsection{Type Checker}
+
+Having encoded \textsc{Mini-ML}'s type system using the data
+structures of our library we know can derive the desired type checker
+by defining the functions \texttt{computeType} and \texttt{checkType}
+with the help of our library. In this example we use the default type
+check mode which just employs an empty initial context on the
+constraint solver.
+
+\smallskip
+
+\begin{lstlisting}
+mlRules = [ true, false, const, add, sub , mul, div, eqi
+          , and, or, var, abs, app, cond, pair, letpoly
+          , letrec, fix ]
+
+computeType :: Term -> TypeCheckResult Ty
+computeType exp = computeTy defaultMode mlRules exp
+
+checkType :: Term -> Ty -> TypeCheckResult Ty
+checkType exp ty = checkTy defaultMode mlRules exp ty
+\end{lstlisting}
+
+\bigskip
+
+Note that in this example we also could have used a non-empty initial
+context which contains the typings for the build-in arithmetic and
+comparison functions. In this case we could have omitted the
+corresponding type rules.

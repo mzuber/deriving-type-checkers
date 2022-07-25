@@ -1,0 +1,48 @@
+\begin{taplfigureT}{label=fj:class,
+                   caption={\textsc{FJ} class, method and constructor typing.}}
+
+\textbf{Method typing:}
+
+\vspace{-1em}
+
+% typing rule for class methods
+\infrule[Method] { (\metaSet{j \in I}{x_j : C_j}) , this : C \vdash e_0 : E_0
+                   \andalso E_0 <: C_0 \andalso superClass(C) = D \\
+                   $if$\ mtype(m,D) = (\metaSeq{k \in I}{D_k}) \rightarrow D_0,
+                   \ $then$\ (\metaSeq{l \in I}{C_l = D_l})\ $and$\ C_0 = D_0 \\
+                   T = Ok\ in\ C}
+                 { \Gamma \vdash C_0\ m (\metaSeq{i \in I}{C_i\ x_i})\ 
+                   \{\ $return$\ e_0\, $;$\ \} : T }
+
+\bigskip
+                   
+\textbf{Constructor typing:}
+
+\smallskip
+
+% typing rule for constructors
+\infrule[Constructor] { superClass(C) = D \andalso
+                        fields(C) \backslash fields(D) =
+                        \metaSet{n \in K}{\{E_n\ f_n\}} \\
+                        fields(C) = \metaSet{l \in I}{\{C_l\ x_l\}} \andalso
+                        fields(D) = \metaSet{m \in J}{\{D_m\ x_m\}} \\
+                        T = Ok\ in\ C }
+                      { \Gamma \vdash C\ (\metaSeq{i \in I}{C_i\ x_i})\
+                        \{\ super(\metaSeq{j \in J}{x_j});\,
+                        \metaSeq{k \in K}{(this.f_k = x_k;)}\ \} : T }
+
+\bigskip
+
+\textbf{Class typing:}
+
+\smallskip
+
+% typing rule for classes
+\infrule[Class] { \Gamma \vdash K : Ok\ in\ C \andalso
+                  \metaSeq{k \in J}{(\Gamma \vdash M_j : Ok\ in\ C)} \andalso
+                  T = Ok }
+                { \Gamma \vdash\ $class$\ C\ $extends$\ D\ \{\ 
+                  \metaSeq{i \in I}{( C_i\ f_i; )}\ K\ 
+                  \metaSeq{j \in J}{M_j}\ \} : T }
+
+\end{taplfigureT}

@@ -1,0 +1,101 @@
+\section{Constraint Generation}
+
+To be able to use constraint-based inference rules for automatically
+deriving type check functionality from a given specification of the
+type system we need to develop an algorithm which generates -- given a
+program and a set of typing rules -- a set of constraints such that
+the program is well typed if and only if these constraints have a
+solution.
+
+The algorithm to be presented is a modified version of Wand's type
+inference algorithm~\cite{Wand87}. Thus the remainder of this section
+introduces Wand's algorithm in detail and discusses the needed
+extensions and modifications.
+
+\input{Figures/wand_skel.tex}
+
+Wand presented the first proof that Hindley-Milner type inference can
+be reduced to unification by developing and proving an algorithm which
+proceeds in the manner of a verification-condition generator. His
+algorithm basically mimics the construction of a term's derivation
+tree and emits corresponding verification conditions (equations over
+type terms) along the way. At every step it keeps track of a set of
+subgoals $G$ (the remaining type assertions to be proven) and a set
+$E$ of equations over type terms which must be satisfied for the
+derivation to be valid.  The algorithm ensures that at every stage the
+most general derivation tree is generated. Figure~\ref{fig:wand:skel}
+captures the algorithm's basic functionality.
+
+This generic definition of the algorithm can be completed in different
+ways by using different tables of actions for processing the subgoals
+in the loop step. Wand presented an action table for terms of the
+simply typed lambda calculus, which is stated in
+Fig.~\ref{fig:wand:action}. In this action table three kinds of
+actions are defined, corresponding to the three kinds of lambda terms
+that might appear in the selected subgoal.
+
+\input{Figures/wand_action.tex}
+
+Wand's type inference algorithm is modeled in a top-down manner: the
+skeleton of the algorithm describes how the construction of the
+derivation tree for the term $t_{0}$ is mimicked and typing equations
+are collected.  The so called action table defines for a specific
+language which subgoals and verification conditions (equations) are
+generated at each step of the algorithm.
+
+This action table has a distinct resemblance with constraint-based
+formulated type rules: based on the conclusion of the type rule
+premises are generated as new subgoals and type equations (equality
+constraints over type terms), where all meta level types of the typing
+rule have been replaced with fresh type variables, are recorded.
+
+\input{Figures/wand_mod.tex}
+
+Thus Wand's algorithm is considered to form a suitable base for the
+library's constraint generation phase. But in order to do so, some
+modifications need to be made. Since the equations arising from the
+use of a type rule are denotated directly as a constraint in this
+deduction rule and the new subgoals are represented by the rule's
+premises, the action table of Wand's algorithm can be omitted. The
+skeleton now needs to be modified such that new subgoals are generated
+based on a rule's premises and type equations are recorded based on
+the constraints of a type rule where all meta level types have been
+replaced with fresh type variables.
+
+A revised version of Wand's algorithm including the described
+modifications is given in Fig.~\ref{fig:wand:mod}.
+
+\section{Constraint Solving}
+\label{sec:constraint-dissolving}
+
+Given an algorithm generating a set of constraints for an expression
+we now want to describe the semantics of a suitable constraint
+solver. But to do so, we need to introduce the notion of auxiliary
+functions in deduction rules first. Type systems regularly make use of
+auxiliary functions to define certain functionality, such as the
+lookup in a context or the instantiation of a type scheme, to allow a
+more concise description of a system's type rules. These auxiliary
+functions are not necessarily specified in an inference rule style
+which yields the designer of a type system additional flexibility when
+defining deduction rules. We consider the notion of auxiliary
+functions quite useful and want to extend our model such that we allow
+auxiliary functions not only in a rule's premises, but also in
+constraints. We even go one step further and allow auxiliary functions
+in constraints whose correct evaluation might depend on the solution
+of another constraint, i.e., we allow the definition of auxiliary
+functions over type variables in constraints. This requirement needs
+to be captured by the constraint solver accordingly, a description of
+the constraint solving algorithm is given in Fig.~\ref{fig:solver}.
+
+To deal with constraints whose evaluation depends on the solution
+of another constraint the algorithm performs a dependency analysis on
+the given constraint set and partitions the set $C$ such that $C_1$
+contains all the constraints which can be solved directly and $C_2$
+consists of all the constraints depending on the solution of one of
+the constraints in $C_1$. Now the constraints in $C_1$ can be solved
+gradually and the possibly arisen substitutions are composed with
+$\sigma$ and applied to all remaining constraints. Finally, the
+constraints in $C_2$ are solved using the algorithm described and the
+resulting substitution is composed with $\sigma$.
+
+\input{Figures/solver.tex}

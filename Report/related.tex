@@ -1,0 +1,222 @@
+\section{Related Work}
+
+\subsection{Tools}
+
+Starting in the early 1980s, research concentrating on formal
+descriptions of programming languages with the goals of generating
+programming environments and reasoning formally about the specification
+and implementation led to various ways of expressing type checkers in
+a given formalism.
+
+Teitelbaum and Reps presented the \textit{Synthesizer Generator}
+\cite{TeitelbaumReps81,RepsTeitelbaum89}, a system to generate
+language-specific editors from descriptions of imperative languages
+with finite, monomorphic type systems like \textsc{Pascal},
+\textsc{Ada} or \textsc{Modula}. They used attributed grammars to
+express the context sensitive part of a language's grammar and the
+generated editors provided knowledge about the static semantics of the
+language such that immediate feedback on errors could be given to the
+programmer.
+
+\bigskip
+
+Bahlke and Snelting developed the \textit{Programming System Generator
+  (PSG)}~\cite{BahlkeSnelting86}, a generator for language-specific
+programming environments. The generated environments, focussing mainly
+on interactive and incremental static analysis of incomplete program
+fragments, consisted of a language-based editor, an interpreter, and a
+fragment library system. Using context relations, \textit{PSG}
+employed a unification-based algorithm for incremental semantic
+analysis to be able to immediately detect semantic errors even in
+incomplete program fragments.
+
+\bigskip
+
+Borras et al.~introduced the logic engine \textit{Typol} as part of
+the \textit{Centaur} system~\cite{Borras88}. The user of the system
+was able to state the static and dynamic semantics of a language with
+the help of inference rules in \textsc{Typol}. Those specifications
+are then compiled to \textsc{Prolog} for execution.
+
+\bigskip
+
+A system with similar aims is Pettersson's \textit{Relational Meta
+  Language (RML)}~\cite{Pettersson1994}. \textit{RML} is a statically
+strongly typed programming language intended for the implementation of
+natural semantics specifications. The basic procedural elements are
+relations: many-to-many mappings defined by a number of axioms or
+inference rules. Pettersson presents a compiler based on translating
+\textit{RML} to Continuation-Passing-Style which generates code that
+is several orders of magnitude faster than \textit{Typol}.
+\textit{RML} was used for developing of a formal specification of the
+modeling language Modelica~\cite{Fritzson98}.
+
+\bigskip
+
+One of the starting points for the research presented in this paper
+was Gast's \textit{Type Checker Generator (TCG)}~\cite{Gast04}, a
+system which focusses on the generation of type checking functionality
+exclusively. Gast presents an abstraction for type systems based on
+logical systems and proposes \textit{type-checking-as-proof-search} as
+a suitable technique for the implementation of a type checker
+generator. In this approach type systems can be understood and
+formalized as logical systems such that there is a typing derivation
+if and only if there is a proof in the logical system. Unfortunately
+this approach has one major disadvantage: deduction rules need to be
+re-factored to make them suitable for proof search, i.e., the
+formulation of a type system needs to be tailored very precisely to
+the used technique of the type checker generator. This overhead is
+acceptable and quite wanted given the design of the \textit{TCG}
+tool. The generator tool does not work in a standard compiler compiler
+way and instead of supplying a source file containing the type
+checker, the user interface to the generated type checking
+functionality is actually a graphical one. This so called
+``inspector'' layer allows the designer of a type system to trace the
+type check procedure in a fine-grained manner and brings
+\textit{TCG}'s intended use to light: it supports the user during the
+design of a type system by providing an ad-hoc, completely traceable
+type checker prototype.
+
+\bigskip
+
+While \textit{TCG} focusses on the generation of type checkers,
+Dijkstra and Swierstra's \textit{Ruler} system~\cite{Dijkstra2006}
+tries to bridge the gap between the formal description and the
+implementation of a type checker. They present a domain specific
+language for describing typing rules and their system is able to
+generate an attribute grammar based implementation as well as a visual
+rendering of the system suitable for the presentation of formal
+aspects. As part of their work the authors state two problems for
+which the \textit{Ruler} system provides a sufficient solution:
+
+\smallskip
+\textit{Problem 1:} It is difficult to keep separate formal
+descriptions and implementations of a modern programming language
+consistent.
+
+\smallskip
+\textit{Ruler} maintains a single description of the static semantics
+of a programming language from which material which can be used as a
+starting point for formal treatment as well as the implementation can
+be generated.
+
+\smallskip
+\textit{Problem 2:} The Extension of a language with new features
+means that the interaction between new and old features needs to be
+examined.
+
+\smallskip
+The \textit{Ruler} language allows the user to describe type rules
+incrementally and makes it easy to describe language features in
+relative isolation. Separate descriptions of language features can be
+combined into a description of the complete language and the system is
+able to check the well-formedness of such a \textit{Ruler} program.
+
+\bigskip
+
+In contrast to the generator approach used by the tools mentioned so
+far, Kollmansberger and Erwig developed the library \textit{Haskell
+  Rules}~\cite{Erwig2006}, a domain-specific embedded language that
+allows semantic rules to be expressed as \textsc{Haskell}
+functions. The library captures many of the thoughts presented in this
+report, like meta variables in rules (which are called logical
+variables), unification, substitution, and the lifting and delaying of
+functions operating on logical values. Judgements formalize the
+relationship of input and output types in rules, which allows a set of
+rules to be associated with a typed relationship. Inference in their
+system is done by a non-deterministic backtracking monad which handles
+unification, application of substitutions, delaying of functions over
+logical values, and the generation of fresh logical variables.
+
+\bigskip
+
+Our work takes on several ideas from both \textit{TCG} and the
+\textit{Ruler} system but enhances them at several points. We chose a
+well know extension of the standard inference rule based way to
+formalize type systems and presented a framework which allows us to
+derive type checking functionality from such type systems. This allows
+the user to formalize her type system in a standard way and requires
+minimum overhead when encoding the type rules to be used with our
+library.  From a software engineering point of view we liked
+\textit{Ruler}'s idea to provide a specific language to define typing
+rules but we were aiming at a closer integration of our system into
+the host language so we rejected the generator approach used in
+\textit{TCG} and \textit{Ruler} in favor of deploying our system as a
+library such as \textit{Haskell Rules}. Thus our library provides a
+domain-specific embedded language~\cite{Hudak1998} for defining
+constraint-based inference rules and a framework for interpreting such
+rules.
+
+
+\subsection{Constraint-based Typing}
+
+Glynn, Sulzmann, and Stuckey presented a general framework for type
+class systems based on \textit{Constraint Handling Rules}
+(CHRs)~\cite{Glynn2001}. Constraint handling rules are a multi-headed
+concurrent constraint language for writing incremental constraint
+solvers. CHRs define transitions from one constraint to an equivalent
+constraint and those transitions are used to simplify constraints and
+detect satisfiability and unsatisfiability. As part of the author's
+work CHRs are used to define constraint relations among types as an
+extension to Herbrand (equational) constraints and the CHR constraint
+solving process is an extension of Herbrand constraint solving to
+arbitrary newly defined constraint relations. The authors introduce
+decidable operational checks which enable type inference and ambiguity
+checking. By type inference for type classes they consider the
+individual tasks of ensuring that class and instance declarations are
+compatible, constraints arising in programs are satisfiable, and type
+schemes provided by the user are valid.
+
+\bigskip 
+Sulzmann, Odersky, and Wehr introduced a general framework HM(X) for
+Hindley/Milner style type systems with
+constraints~\cite{Odersky1999,Sulzmann2000}. Particular type systems
+can be obtained by instantiating the parameter X to a specific
+constraint system. The Hindley/Milner system itself is obtained by
+instantiating X to the trivial constraint system over a one point
+domain.
+
+Following the lead of constraint programming they treat a constraint
+system as a cylindric algebra with a projection operator. This allows
+them to formulate a logically pleasing and pragmatically useful rule
+for quantifier introduction. Additionally, projection is an important
+source of opportunities for simplifying constraints. As part of the
+HM(X) framework, simplifying means changing the syntactic
+representation of a constraint without changing its denotation.
+
+Two of the main strengths of the Hindley/Milner system are the
+existence of a principal types theorem and a type inference
+algorithm. The authors state sufficient conditions on the constraint
+domain X so that the principal types property carries over to
+HM(X). Based on these conditions they present a generic type inference
+algorithm that will always yield the principal type of a term and
+discuss some typing features like extensible records, type classes,
+overloading, and subtyping as part of their framework.
+
+\bigskip
+
+As part of the \textsc{Helium} project Heeren, Hage, and Swierstra
+used constraint-based type inferencing in a compiler covering a
+significant subset of the \textsc{Haskell} language~\cite{Heeren2003}.
+The major motivation of this project was to yield understandable and
+appropriate type error messages for novice functional
+programmers. Instead of using a single deterministic type inference
+process which works best in all cases for everybody, they advocate the
+use of a more flexible system that can be tuned by the programmer. To
+obtain the desired flexibility the authors chose a constraint-based
+approach and divided the type inference process into three distinct
+phases:
+
+\begin{enumerate}
+\item the generation of constraints in the abstract syntax tree,
+\item the ordering of constraints in the tree into a list, and
+\item the solving of constraints.
+\end{enumerate}
+
+This separation has resulted in the \textsc{Top} framework, a
+\textsc{Haskell} library for building program analysis that offer high
+quality feedback to users~\cite{Heeren2005}. The generality of their
+framework allows the simulation of well-known type inference
+algorithms such as $\mathcal{W}$~\cite{DamasMilner82} and
+$\mathcal{M}$~\cite{Lee1998}, by choosing an appropriate order in
+which the type constraints should be solved.

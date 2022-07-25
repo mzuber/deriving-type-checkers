@@ -1,0 +1,125 @@
+\section{Conclusion and Future Work}
+
+We presented the design and implementation of a library capable of
+deriving type check functionality from a type system's formal
+description. We proposed constraint-based inference rules to form a
+suitable formalism to accomplish this task and implemented a library
+which works in the fashion of an interpreter for typing rules. The
+initial feature set of our library was determined by two languages
+chosen as case studies. Their type systems could be adapted to our
+constraint-based setting in a straightforward manner and we were able
+to derive type checkers for both languages.
+
+Nevertheless, the library is still more a proof-of-concept
+implementation than a production quality tool. We tried to take many
+``real world'' requirements such as error messages and the use of
+auxiliary functions in deduction rules into account but the
+implementation still carries some non-negligible limitations.
+
+One major drawback of the current version of the framework is the
+fixed type representation. As with the abstract syntax for expression,
+the abstract syntax for types is typically custom-tailored for the
+language to be implemented and a production quality tool should
+provide certain means to allow the user to define her own type
+representation. This shortcoming is merrily do to technical reasons,
+namely the use of existential types for judgements and meta-level
+functions prevents us from making the type class \texttt{Var}
+polymorphic in its used data structure for types.
+
+Additionally, there still is certain overhead for the user to make her
+abstract syntax ready to be used within our type checking
+framework. To some extend we managed to prevent the user from writing
+boilerplate code when it comes to defining instance declarations for
+some type classes by providing \textit{Template Haskell} functions
+accomplishing this task. But even so we provide this functionality to
+the user one flaw still remains: these parts of the ``internal
+machinery'' are visible to her and from a software engineering point
+of view this should be considered bad style. This limitation could be
+overcome easily by using data type generic programming to accomplish
+tasks like instantiating meta-level elements, first order unification,
+or collecting type variables contained in certain
+elements. Unfortunately there is no data type generic programming
+library available in the \textsc{Haskell} universe which provides
+means to handle existential types without requiring any additional
+information by the user.
+
+To be able to turn the current prototype implementation into a
+production quality tool, these two crucial limitations need to be
+taken care of. Since these flaws could not be overcome in the current
+host language of the project, the only way to handle them would be to
+port our library to a language providing mechanism or language
+features to handle these drawbacks accordingly. For a number of
+reasons, the functional, object-oriented multi paradigm language
+\textsc{Scala}~\cite{Odersky2008} seems to be a promising language to
+implement the library described in this report without the limitations
+stated earlier. First of all, \textit{subtyping} is a great language
+feature for writing frameworks, especially when it comes to defining
+algorithm templates where the user can hook her own data structures
+in. Additionally, the \textsc{Scala} language processing library
+\textit{Kiama}~\cite{Kiama} ships with a term rewriting library which
+provides functionality similar to the ones found in common data type
+generic programming libraries. And since \textsc{Scala} 2.10 will
+introduce a macro/template system, algorithmic program construction
+for the generation of boilerplate code is still possible. Furthermore
+\textsc{Scala}'s notion of \textit{implicit conversions} will allow a
+more convenient use of auxiliary functions in deduction rules since
+the lifting of such a function call into the corresponding wrapper
+data structure can be done ``under the hood''. Last but not least,
+\textsc{Scala}'s syntactical features make it a great host language
+for embedding domain specific languages.
+
+Besides the mentioned modifications on the current implementation,
+future work should include several enhancements providing the user of
+the framework more flexibility when developing type checkers with the
+help of our library.
+
+On the one hand it might be discussed whether the
+\textit{first-fit-rule-matching semantic} of the constraint generation
+function limits the expressiveness of our library in a notable
+form. When instantiating the first matching rule during the constraint
+generation phase our library formulates one distinct requirement to
+the type rules in order to be able to derive type checking
+functionality from them: the rules must be syntax-directed, i.e., the
+conclusions of the formulated rules cannot be
+overlapping.\footnote{Pierce calls such rules algorithmic and
+  discusses this matter in the context of subtyping~\cite{Tapl}.} Thus
+a type system needs to be re-factored in two ways in order to derive a
+type checker from it with the help of our library: its type rules
+need to be formulated constraint-based and syntax-directed. To handle
+rules with overlapping conclusions the techniques used by the library
+need to be adjusted slightly. At the moment, one constraint set is
+generated for a given program and the program is well typed, if and
+only if these constraints have a solution. Allowing declarative typing
+rules, the constraint generation phase needs to mimic the backtracking
+in the type derivation by computing a set of constraint sets for a
+given program and the program is well typed, if and only if at least
+one constraint set has a solution which is equal to the solutions of
+all other solvable constraint sets.
+
+Additionally, the framework could be enhanced at several points
+providing more flexibility for the user when defining type
+checkers. Following the ideas presented in the \textit{TOP}
+framework~\cite{Heeren2005}, our constraint-based setting should be
+adapted such that three phases are used instead of just two:
+
+\begin{enumerate}
+\item Collecting Constraints
+\item Ordering Constraints
+\item Solving Constraints
+\end{enumerate}
+
+In this setting, the constraint generation phase would yield a tree
+labeled with constraints. This tree is flattened in the next phase
+using tree walks or tree transformers. The library should provide a
+default set of flattening strategies (like top-down or bottom-up), but
+the user should still be able to define her own ordering strategies.
+Last but not least the constraint solving phase should be improved by
+allowing the user to employ different solving techniques, e.g., a
+greedy solver or even more sophisticated approaches like type graphs
+for global analysis~\cite{Heeren2003a,Hage2005}.
+
+In addition with some more infrastructure for error messages
+(positions, etc.) these improvements and modifications should push the
+implementation towards a level of expressiveness and flexibility which
+should enable us to define production quality type checkers with the
+help of our library.

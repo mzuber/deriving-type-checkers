@@ -1,0 +1,625 @@
+\section{A Type Checker for FJ}
+
+\textsc{FeatherweightJava} \cite{FJ01} was introduced by Igarashi,
+Pierce, and Wadler in order to present a lightweight version of
+\textsc{Java} which enables rigorous arguments about key properties
+such as type safety. The language omits almost all features of the
+full \textsc{Java} to obtain a small calculus for which detailed
+proofs of type safety become considerably easy.
+
+Nevertheless, it still captures the essential computational ``feel'',
+providing classes, methods, fields, inheritance and dynamic typecasts
+with a semantic closely following \textsc{Java}'s. In this sense,
+every \textsc{FJ} program is an executable \textsc{Java} program.
+
+\subsection{Syntax}
+
+The syntax of \textsc{FJ} therefore is equivalent to \textsc{Java}'s
+syntax with following omissions: concurrency (threads), inner classes,
+reflection, assignment, interfaces, overloading, messages to super,
+null pointers, base types (int, boolean, etc.), abstract method
+declarations, shadowing of superclass fields by subclass fields,
+access control (public, private, etc.) and exceptions. The features of
+\textsc{Java} that \textsc{FJ} does model include mutually recursive
+class definitions, object creation, field access, method invocation,
+method override, method recursion via \textit{this}, subtyping and
+casting.
+
+An EBNF-style syntax definition of \textsc{FJ} is given below. The
+nonterminal $C$ ranges over class names, $f$ ranges over field names,
+$m$ ranges over method names and $x$ ranges over all valid
+\textsc{Java} identifier.
+
+\begin{displaygrammar}
+<L> ::= 'class' <C> 'extends' <C> '\{' [<C> <f> ';']* <K> <M>* '\}'
+<K> ::= <C> ( [<C> <f>]* ) '\{' 'super' (<f>* ) ';' [ 'this' '.' <f> '=' <f>]* '\}'
+<M> ::= <C> <m> ( [<C> <x>]* ) '\{' 'return' <e> ';' '\}'
+<e> ::= <x> \mid <e> '.' <m> (<e>*) \mid 'new' <C> (<e>*) \mid (<C>) <e>
+
+\end{displaygrammar}
+
+As part of this example we want to define abstract syntax for
+\textsc{FJ} suitable to be used within our framework. To do so, we
+define data structures for classes, methods, constructors, and
+expressions, but add according meta-level variants to each type
+additionally:
+
+\smallskip
+
+\begin{lstlisting}
+-- FJ expressions
+data FJExpr = Var Ide
+            | Invoke FJExpr FJExpr
+            | Meth Ide (Sequence FJExpr)
+            | New Ty (Sequence FJExpr)
+            | Cast Ty FJExpr
+            | Assign FJExpr FJExpr
+            | Return FJExpr
+            | MExpr String  -- Meta level expression
+
+-- FJ method declarations
+data FJMethod = M { mRetTy  :: Ty
+                  , mName   :: Ide
+                  , mParams :: Sequence (Ty, FJExpr)
+                  , mBody   :: FJExpr
+                  }
+              | MM String  -- Meta level method
+
+
+-- FJ constructor declaration
+data FJConstructor = C { cName   :: Ty
+                       , cParams :: Sequence (Ty, FJExpr)
+                       , super   :: FJExpr
+                       , assigns :: Sequence FJExpr
+                       }
+                   | MC String  -- Meta level constructor
+
+
+-- FJ class definition
+data FJClass = Class { clName      :: Ty
+                     , superClass  :: Ty
+                     , attributes  :: Sequence (Ty,FJExpr)
+                     , constructor :: FJConstructor
+                     , methods     :: Sequence FJMethod
+                     }
+\end{lstlisting}
+
+\smallskip
+Secondly, we give instance declarations for the type class
+\texttt{AST} by providing a function for indexing meta-level elements,
+a relation mapping all meta-level elements to their corresponding
+object-level pendants, and a discriminator. We omit the instance
+declarations for \texttt{FJMethod}, \texttt{FJConstructor}, and
+\texttt{FJClass}, their implementation follows the exact same pattern
+as the one for \texttt{FJExpr}.
+
+\smallskip
+\begin{lstlisting}
+instance AST FJExpr where
+    index (Var x)       n = Var (index x n)
+    index (Invoke e f)  n = Invoke (index e n) (index f n)
+    index (Meth m args) n = Meth (index m n) (indexM args n)
+    index (New c args)  n = New (index c n) (indexM args n)
+    index (Cast c e)    n = Cast (index c n) (index e n)
+    index (Assign l r)  n = Assign (index l n) (index r n)
+    index (Return e)    n = Return (index e n)
+    index (MExpr ide)   n = MExpr (ide ++ show n)
+
+    (MExpr _) ~= e = case e of
+                       MExpr _ -> False
+                       _       -> True
+    _ ~= _         = False
+
+    isMeta (MExpr _) = True
+    isMeta _         = False
+\end{lstlisting}
+
+Now we can utilize the library's \textit{Template Haskell} based
+functionality to derive code for the evaluation of the meta-level
+functions, the application of substitutions, the instantiation of
+meta-level sets and sequences, the unification of object and
+meta-level elements, and the collection of type variables contained by
+an element.
+
+\smallskip
+\begin{lstlisting}
+$(deriveEvaluable ''FJExpr)
+
+$(deriveSubstitutable ''FJExpr)
+
+$(deriveInstantiable ''FJExpr)
+
+$(deriveUnifiable ''FJExpr)
+
+$(deriveVars ''FJExpr)
+\end{lstlisting}
+
+\smallskip
+Finally our abstract syntax for \textsc{FJ} classes and expressions is
+ready to be used within our type checking framework.
+
+
+\subsection{Type rules}
+
+Having defined \textsc{FJ}'s syntax it becomes clear that we need to
+reason about possibly empty sets and sequences of expressions
+(e.g.~parameter lists), fields, methods, and even judgements and
+constraints in the type rules.  Since deduction rules reason at meta
+level about their premises and conclusion, the need for a concise
+notion for sets and sequences at meta level arises. We follow standard
+notion used in set theory and define the combinators
+
+\begin{center}
+  $\metaSeq{i \in I}{e_i} := e_1\ e_2\ ...\ e_{|I|}$ \quad and \quad
+  $\metaSet{i \in I}{}{e_i} := \{\, e_1,\, ...\ , e_{|I|}\, \}$.
+\end{center}
+
+Explicitly annotating the index set $I$ at each combinator allows us
+to reason about the same sequences/sets in different premises. If only
+one index set is used throughout all premises of a typing rule it
+might be omitted.
+
+\bigskip
+
+As part of our definition of a constraint-based type system for
+\textsc{FJ} we will utilize some auxiliary functions providing
+commonly needed functionality (like calculating the fields of a class
+or the type of a method) in the deduction rules:
+
+\paragraph{Field lookup:}
+
+\[ fields(\text{Object}) = \emptyset \]
+
+\infrule[] { CT(C) =\ $class$\ C\ $extends$\ D\ \{\
+             \metaSeq{i \in I}{( C_i\ f_i; )}\ K\ \metaSeq{j \in J}{M_j}\ \} }
+           {fields(C) = \metaSet{i \in I}{\{ C_i\ f_i \}}\ \cup fields(D)}
+
+
+The lookup of a class' fields can be implemented in a straightforward
+manner by folding over the fields of the desired class and its super
+classes.
+
+\begin{lstlisting}
+fields :: [FJClass] -> Ty -> Maybe (Set (Ty,FJExpr))
+fields _  (TV _)             = Nothing
+fields [] (T (Ide "Object")) = Just $ ObjSet (Data.Set.empty)
+fields [] _                  = Nothing
+fields prog c =
+    Just $ foldl
+      (\ s1 s2 -> fromJust (union s1 s2)) emptySet
+      (mapMaybe (flds prog) (c:(superClasses prog c)))
+
+flds _ (T (Ide "Object")) = Just $ ObjSet (Data.Set.empty)
+flds [] c       = Just $ ObjSet (Data.Set.empty)
+flds (cl:cls) c = if clName cl == c
+                  then Just $ setFromSeq (attributes cl)
+                  else flds cls c
+\end{lstlisting}
+
+\paragraph{Field type lookup:}
+
+\smallskip
+\[
+ftype(f,C) = \begin{cases}
+  \bullet & |\ C = Object \\
+  D       & |\ D\, f \in fields(C)
+\end{cases}
+\]
+
+\bigskip
+The implementation of the \textit{ftype} function just looks up if the
+given field exists in the given class and returns its type accordingly.
+
+\smallskip
+\begin{lstlisting}
+ftype :: [FJClass] -> FJExpr -> Ty -> Maybe Ty
+ftype _ _ (TV _)             = Nothing
+ftype _ _ (T (Ide "Object")) = Nothing
+ftype prog f c = if isNothing cls then Nothing
+                 else ty
+    where
+      cls          = find (\ cl -> clName cl == c) prog
+      (ObjSeq as)  = attributes $ fromJust cls
+      ty           = lookup f $ map swap (toList as)
+\end{lstlisting}
+
+\bigskip\textit{Method type lookup:}
+
+\infrule[]{ CT(C) =\ $class$\ C\ $extends$\ D\ \{\
+            \metaSeq{j \in J}{( C_j\ f_j; )}\ K\ \metaSeq{l \in L}{M_l}\ \} \\
+            B\ m(\metaSeq{i \in I}{B_i\ x_i})\ \{ ... \} \in \metaSeq{l \in L}{M_l} }
+          { mtype(m,C) = \metaSeq{i \in I}{B_i} \rightarrow B }
+          
+\infrule[]{ CT(C) =\ $class$\ C\ $extends$\ D\ \{\
+            \metaSeq{j \in J}{( C_j\ f_j; )}\ K\ \metaSeq{l \in L}{M_l}\ \} \andalso
+            m \not\in \metaSeq{l \in L}{M_l} }
+          { mtype(m,C) = mtype(m,D) }
+
+\bigskip
+The lookup of a method's type can be implemented in the same style as
+the lookup of a field's type:
+
+\smallskip
+\begin{lstlisting}
+mtype :: [FJClass] -> Ide -> Ty -> Maybe Ty
+mtype _ _ (TV _)             = Nothing
+mtype _ _ (T (Ide "Object")) = Just Bottom
+mtype prog m c = if isNothing cls then Just Bottom
+                 else ty
+    where
+      cls       = find (\ cl -> clName cl == c) prog
+      ObjSeq ms = methods (fromJust cls)
+      mth       = find (\ mth -> mName mth == m) (toList ms)
+      ty        = maybe (Just Bottom) (Just . mkMT) mth
+
+mkMT :: FJMethod -> Ty
+mkMT (M rt _ (ObjSeq ps) _) = (extractTSeq ps) ->: rt
+    where
+      extractTSeq = (TySeq . ObjSeq) . (fmap fst)  
+\end{lstlisting}
+
+\paragraph{Super class lookup:}
+\[
+ superClass(C) = \begin{cases}
+   \bullet & |\ C = Object \\
+   D       & |\ CT(C) =\ $class$\ C\ $extends$\ D\ \{\ ... \}
+  \end{cases}
+\]
+
+\bigskip
+This function can be implemented straightforward by just looking up
+the given class and selecting its superclass.
+
+\smallskip
+\begin{lstlisting}
+superCls :: [FJClass] -> Ty -> Maybe Ty
+superCls _ (TV _)             = Nothing
+superCls _ (T (Ide "Object")) = Just Bottom
+superCls [] _                 = Just Bottom
+superCls (c:cls) cl = if clName c == cl
+                      then Just (superClass c)
+                      else superCls cls cl
+\end{lstlisting}
+
+\bigskip
+
+Given these auxiliary functions and a notion for sets and sequences at
+meta level we now have everything at hand to define a constraint-based
+type system for \textsc{FJ} in Fig.~7 and Fig.~8.
+
+\input{Figures/fj_class}
+
+The constraint-based typing rules for \textsc{FJ} expressions are
+essentially adapted from the original formalization given in
+\cite{FJ01}. Changes have been made to the \textsc{Field} typing rule,
+where the type of a field is determined with the help of an auxiliary
+function (which is similar to the way a method's type is determined).
+
+The rules for classes and methods needed much stronger modifications:
+First of all, an additional type rule for constructors is
+introduced. This rule makes sure the constructor is syntactically
+correct according to the \textsc{FJ} class specification. Thus, this
+functionality is removed from the original \textsc{Class} rule, which
+now just generates constraints verifying that constructor and methods
+are ``Ok'' in this class. The \textsc{Method} typing rule follows the
+original definition, except that the super class of the class which
+encapsulates the method is determined with the help of an auxiliary
+function. For this typing rule an additional note on the (possibly not
+that intuitive) conditional constraint should be given: This
+constraint defines \textsc{FJ}'s functionality to override base class
+methods in a sub class, i.e., if a sub class uses the same name for
+one of its methods as used in its base classes, then it must override
+this method by using the same parameter and return types.
+
+\input{Figures/fj_expressions}
+
+Having defined a set of constraint-based inference rules to cover the
+\textsc{FJ} type system we now can start to encode these rules using
+the data structures of our library. To do so, we define the needed
+meta-level expressions, types, contexts, identifier, methods, and
+contexts again:
+
+\begin{lstlisting}
+ctx = MCtx "Gamma" ; m = MIde "m" ; m_j = MM "M" ; k = MC "K"
+
+this = Var (Ide "this") ; f = Var (MIde "f")
+x    = Var (MIde "x")   ; f_i = Var (MIde "f")
+x_i  = Var (MIde "x")   ; f_j = Var (MIde "f")
+x_j  = Var (MIde "x")   ; f_k = Var (MIde "f") 
+x_k  = Var (MIde "x")
+e = MExpr "e" ; e0 = MExpr "e0" ; e_i = MExpr "e"
+
+c   = MT "C"  ; d   = MT "D"  ; c'  = MT "C'" 
+c0  = MT "C0" ; d0  = MT "D0" ; ec  = MT "E"
+c_i = MT "C"  ; d_i = MT "D"  ; e0C = MT "E0"
+c_j = MT "C"  ; d_j = MT "D"  ; t   = MT "T"
+c_k = MT "C"  ; d_k = MT "D"  ;
+\end{lstlisting}
+
+Secondly, we need to lift all auxiliary functions to the meta level to
+be able to use them in the to be defined deduction rules, e.g.,
+
+\begin{lstlisting}
+fields :: [FJClass] -> Ty -> Set (Ty,FJExpr)
+fields prog c =
+    SetFun (MF "fields" (uncurry Auxiliary.fields) (prog,c))
+\end{lstlisting}
+
+For the subtype relation we define a pair of operators yielding a
+convenient notion for defining subtype constraints:
+
+\begin{lstlisting}
+(==>) :: [FJClass] -> (Ty, Ty) -> Constraint Ty
+prog ==> (s,t) =
+    Predicate (MF "<:" (uncurry (subtype prog)) (s,t))
+    (mkErr "Error: could not solve subtype constraint.")
+
+s <: t = (s,t)
+
+infix 6 <:
+infix 5 ==>
+\end{lstlisting}
+
+All other auxiliary functions are lifted in the same way to the
+meta level as given in the \texttt{fields} example, we omit the
+corresponding \textsc{Haskell} code.
+
+Given the meta-level elements defined above we now have everything at
+hand to encode the constraint-based type system for \textsc{FJ} using
+the data structures of our library.
+
+\bigskip\textit{Variables}
+
+\begin{lstlisting}
+var :: Rule
+var = Rule [ t =:= (ctx ! x) <|> err ]
+           ( ctx |- x <:> t )
+    where
+      err = varError ctx x t
+\end{lstlisting}
+
+The inference rule for variables is encoded in a straightforward
+manner, except that this time we employ more sophisticated error
+handling. Instead of printing just a static message in case solving
+the rule's sole equality constraint fails, we define a function
+producing a message hinting on the variable as well as the error
+reason. If the variable is not contained in the given context, this
+variable is not defined in the current scope and a corresponding error
+message is generated. Otherwise, the inferred type for the variable
+does not match the type given in the conclusion's context and a
+message hinting on the inferred type as well as the expected type is
+generated. Last but not least, the function generating the error
+messages is lifted to the meta level and can now be attached to a
+constraint:
+
+\begin{lstlisting}
+varError :: Context -> FJExpr -> Ty -> ErrorMsg
+varError ctx x ty =
+    ErrorMsg x (MF "" (Just . msg) (ctx,x,ty))
+\end{lstlisting}
+
+\begin{lstlisting}
+msg :: (Context, FJExpr, Ty) -> String
+msg (ctx,x,ty) =
+    case ((ctx ! x) :: Maybe Ty) of
+      Nothing  -> "Undefined variable: " ++ pprint x
+      Just ty' -> "Type Missmatch: " ++
+                  "Could not match expected type `" ++
+                  pprint ty ++ "' against inferred type `" ++
+                  pprint ty' ++ "'"
+\end{lstlisting}
+
+\bigskip\textit{Field access}
+
+\smallskip
+
+Defining the type rule for accessing an object's fields comes easy
+using the corresponding auxiliary function presented earlier. Again,
+we define an explicit error message handling all the cases which can
+occur when solving the equality constraint fails.
+
+\begin{lstlisting}
+field :: [FJClass] -> Rule
+field prog = Rule [ ctx |- e <:> d
+                  , c =:= ftype prog f d <|> err ]
+                  ( ctx |- Invoke e f <:> c )
+    where
+      err = fieldError prog (Invoke e f) f c d
+\end{lstlisting}
+
+\begin{lstlisting}
+fieldError p exp f c d =
+    ErrorMsg exp (MF "" (Just . msg) (p,f,c,d))
+    
+msg :: ([FJClass],FJExpr,Ty,Ty) -> String
+msg (p,f,c,d) =
+    case (ftype p f d) of
+      Nothing -> pprint f ++ " is not a field of class " ++
+                 pprint d
+      Just c' -> "Type Missmatch: " ++
+                 "Could not match expected type `" ++
+                 pprint c ++ "' against inferred type `" ++
+                 pprint c' ++ "'"
+\end{lstlisting}
+
+\bigskip\textit{Method invocation}
+
+\smallskip
+
+As part of the definition of the deduction rule covering method
+invocations we utilize the library's convenience function \texttt{mSeq}
+to define meta-level sequences in a more compact way. Additionally, we
+introduce a generic error message handling type mismatch errors and
+use it to produce a useful error message if the inferred and the
+expected return type of the method do not match. The error messages
+for the constraint covering the method's arity and its parameter types
+are just static messages again. We omit more sophisticated error
+handling in these cases to keep the presentation of the rule a bit
+more compact. The earlier examples showed how to define useful error
+messages with the help of our library. For the rest of this section we
+will keep the error messages short and simple and use just static
+strings. Since the upcoming rule definitions are more complex than the
+ones presented so far, this simplification is expected to help to keep
+the encoded rules more compact by allowing us to focus on the
+interesting parts of the rule encodings.
+
+\begin{lstlisting}
+invoke prog =
+    Rule [ ctx |- e <:> ec
+         , mSeq "I" (ctx |- e_i <:> c_i)
+         , mtype prog m ec =:= (mSeq "I" d_i ->: d) <|> err1
+         , mSeq "I" ((prog ==> c_i <: d_i) <|> err2)
+         , c =:= d <|> err3 ]
+         ( ctx |- Invoke e mcall <:> c )
+        where
+          mcall = Meth m (mseq "I" e_i)
+          err1  = mkErr "Wrong number of arguments."
+          err2  = mkErr "Wrong argument types."
+          err3  = typeMissmatch (Invoke e mcall) c d
+\end{lstlisting}
+
+\begin{lstlisting}
+typeMissmatch expr t1 t2 =
+    ErrorMsg expr (MF "" (Just . msg) (t1,t2))
+    
+msg (t1,t2) =
+    "Type Missmatch: Could not match expected type `"
+    ++ pprint t1 ++ "' against inferred type `" ++
+    pprint c' ++ "'"
+\end{lstlisting}
+
+\bigskip\textit{Constructor calls}
+
+\smallskip
+
+The type rule for constructor calls follows the one for method
+invocations closely. Note the difference between the two convenience
+functions \texttt{mSeq} and \texttt{mseq}. While the latter one is
+just an abbreviation for a meta-level sequence over a meta-level index
+set, \texttt{mSeq} is an overloaded function wrapping such a
+meta-level sequence in another constructor, in this case a sequence of
+judgements (\texttt{JSeq}) and a sequence of constraints
+(\texttt{ConstraintSeq}).
+
+\begin{lstlisting}
+new prog = 
+    Rule [ mSeq "I" (ctx |- e_i <:> c_i)
+         , fields prog c =:= mset "I" (d_i, f_i) <|> err1
+         , mSeq "I" ((prog ==> c_i <: d_i) <|> err2)
+         , d =:= c <|> err3 ]
+         ( ctx |- New c (mseq "I" e_i) <:> d )
+    where
+      err1 = mkErr "Wrong constructor call."
+      err2 = mkErr "Wrong argument types."
+      err3 = typeMissmatch (New c (mseq "I" e_i)) d c
+\end{lstlisting}
+
+\newpage
+
+\bigskip\textit{Up and down casts}
+
+\smallskip
+
+The type rules for up and down casts need some special treatment as
+part of their encoding in the library's data structures. The
+\textit{first-fit-rule-matching} semantics of our rule instantiation
+algorithm forbids the use of rules with overlapping
+conclusions. Luckily, the two rules for up and down casts can be
+easily merged into one rule by combining the arising constraints in a
+disjunction.
+
+\begin{lstlisting}
+cast prog =
+    Rule [ ctx |- e <:> d
+         , Or upcast downcast <|> mkErr "Cast failed."
+         , ec =:= c <|> typeMissmatch (Cast c e) ec c ]
+         ( ctx |- Cast c e <:> ec )
+    where
+      upcast   = prog ==> d <: c
+      downcast = And (prog ==> c <: d) (c =/= d)
+\end{lstlisting}
+
+\bigskip\textit{Method definitions}
+
+\smallskip
+
+The type rule for method definitions introduces a conditional
+constraint to cover the overriding facilities of \textsc{FJ}. If a
+method definition overrides the definition of a method in one of its
+super classes, all parameter types must be subtypes of the overridden
+method's parameters. All other premises and constraints are encoded in
+a similar fashion as the ones presented so far.
+
+\begin{lstlisting}
+method prog =
+    Rule [ c' =:= OkIn c <|> mkErr "Unification error."
+         , ctx' |- e0 <:> e0C
+         , (prog ==> e0C <: c0) <|>
+           mkErr "Wrong return type in method body."
+         , superClass prog c =:= d <|>
+           mkErr "Superclass lookup failed."
+         , If override (And subtypes (c0 =:= d0)) <|>
+           mkErr "Wrong override." ]
+          ( ctx |- M c0 m params (Return e0) <:> c' )
+    where
+      params   = mseq "I" (c_i,x_i)
+      ctx'     = insertCtx this c (ctxFromSeq params)
+      override = mtype prog m d =:= (mSeq "I" d ->: d0)
+      subtypes = mSeq "I" (prog ==> c_i <: d_i)
+\end{lstlisting}
+
+\bigskip\textit{Constructor definitions}
+
+\smallskip
+
+The type rule for constructor definitions basically covers the
+syntactical requirements formulated by the \textsc{FJ} language
+definition, i.e., all class fields are initialized by the constructor
+parameters with the help of the super constructor and assignments. The
+used auxiliary function \texttt{$\backslash\backslash$} denotes set
+difference lifted to the meta level and is already defined as part of
+the library.
+
+\newpage
+
+\begin{lstlisting}
+constructor prog =
+    Rule [ superClass prog c =:= d <|>
+           mkErr "Superclass lookup failed."
+         , fields prog c =:= mset "I" (c_i,x_i) <|>
+           mkErr "Wrong number of parameters."
+         , fields prog d =:= mset "J" (d_j,x_j) <|>
+           mkErr "Wrong number of args in super call."
+         , flds =:= mset "K" (e_k,f_k) <|>
+           mkErr "Wrong number of assignments."
+         , t =:= OkIn c <|> mkErr "Type Missmatch." ]
+         ( ctx |- (C c ps s as) <:> t )
+    where
+      ps   = mseq "I" (c_i,x_i)
+      s    = Meth (Ide "super") (mseq "J" x_j)
+      as   = mseq "K" (Assign (Invoke this f_k) f_k)
+      e_k  = MT "E"
+      flds = fields prog c \\ fields prog d
+\end{lstlisting}
+
+\bigskip\textit{Class definitions}
+
+\smallskip
+
+The type rule for class definitions just makes sure the constructor
+definition as well as all method definitions are defined correctly in
+this class.
+
+\begin{lstlisting}
+fjclass prog = Rule [ ctx |- k <:> okInC
+                    , mSeq "J" (ctx |- m_j <:> okInC)
+                    , t =:= mkT "Ok" <|> mkErr "Type missmatch." ]
+                    ( ctx |- (Class c d as k ms) <:> t )
+    where
+      as    = mseq "I" (c_i,f_i)
+      ms    = mseq "J" m_j
+      okInC = OkIn c
+\end{lstlisting}
+
+Using the encoded rules a type checker for \textsc{FJ} can be derived
+in the same style as presented in the previous section.

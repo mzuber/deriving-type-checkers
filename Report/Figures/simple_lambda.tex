@@ -1,0 +1,13 @@
+\begin{taplfigureT}{label=simpletypes, caption={Simply, constraint-based typed lambda calculus.}}
+~\textit{Simple Lambda}
+
+\vspace{-1em}
+\infax[Var] { \Gamma \vdash x : T\ |\ \{ T = \Gamma (x) \} }
+              
+\infrule[Abs] { \Gamma ,x:T_1 \vdash e : T_2\ |\ C }
+              { \Gamma \vdash \lambda x.e : T\ |\ C \cup \{ T = T_1 \rightarrow T_2 \} }
+
+\infrule[App] { \Gamma \vdash f : T_1\ |\ C_1 \andalso \Gamma \vdash e : T_2\ |\ C_2 }
+              { \Gamma \vdash (f)\, e : T\ |\ C_1 \cup C_2 \cup \{ T_1 = T_2 \rightarrow T \} }
+              
+\end{taplfigureT}

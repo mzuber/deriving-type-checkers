@@ -1,0 +1,487 @@
+\section{Designing the Library}
+
+Having defined a formalism for automatically deriving type check
+functionality from a type system's specification we now present the
+design of a \textsc{Haskell} library utilizing the algorithms of the
+previous sections and discuss some aspects of the implementation in
+detail.
+
+To determine the initial feature set of the library we used two
+languages as case studies and the characteristics of these languages
+formed the requirements regarding the expressiveness of our
+implementation. We chose \textsc{Mini-ML}~\cite{MiniML86} and
+\textsc{FeatherweightJava}~\cite{FJ01} due to their role as core
+calculi for pure functional and class-based, object-oriented languages
+respectively.  Additionally their type systems contain interesting
+typing concepts such as strongly typed expressions without type
+declarations (type inference) and let-polymorphism in \textsc{Mini-ML}
+as well as subtyping (via single inheritance), casting, and method
+override in \textsc{FeatherweightJava}.
+
+The library provides a default abstract syntax for types and the user
+defines her type system by deduction rules using the given components
+for abstract syntax and types. Based on a set of typing rules the
+library's type check function is able to compute the most general type
+of an expression by interpreting the given inference rules.
+
+\subsection{Abstract Syntax}
+
+For rapid prototyping of type checking functionality our library ships
+with a number of default components for abstract syntax and types
+which fulfill the needed technical requirements to be used in
+deduction rules.
+
+Typing rules reason at a meta level about the used contexts,
+expressions, and types. The library's constraint generation function
+instantiates such rules and replaces all meta-level elements with
+their object level-pendants. Thus the definitions for expressions and
+types have to provide object and meta-level versions accordingly. To
+ease the implementation of abstract syntax suitable for use with
+our type checking framework we supply common functionality which
+provides object as well as meta-level versions and fulfills all the
+technical requirements arising from the constraint generation and the
+constraint solving algorithms. Some of these components, namely
+identifiers, sets, sequences, and auxiliary functions in type rules,
+are presented subsequently.
+
+Names, or to be more precise, identifiers of elements are an essential
+component of a language's abstract syntax. Given the requirements
+stated earlier the data type \texttt{Identifier} yields everything
+needed to be used in deduction rules:
+\begin{lstlisting}
+data Identifier a = MIde String    -- Meta level
+                  | Ide  a         -- Object level
+
+type Ide = Identifier String 
+\end{lstlisting}
+Simple, \texttt{String}-based identifiers can be realized by
+instantiating the type parameter \texttt{a} accordingly.
+
+The \textsc{FeatherweightJava} type system depends on sets and
+sequences over expressions, types and judgements. Consider for example
+a type rule for method definitions: as part of an inference rule we
+have to reason about an arbitrary number of parameters at meta level
+since the exact arity of the method is unknown until the rule is
+instantiated. To be able to reason about such syntactical elements in
+deduction rules we introduce data structures representing sets and
+sequences at object and at meta level:
+\begin{lstlisting}
+data ISet = MetaISet String
+          | ISet [Int]
+
+data Sequence a = MetaSeq ISet a
+                | ObjSeq  (Data.Seq.Seq a)
+
+data Set a = MetaSet ISet a
+           | ObjSet (Data.Set.Set a)
+\end{lstlisting}
+Meta-level sets and sequences over elements $e$ are denotated as the
+union $\cup_{\text{i} \in \text{I}}\ \{e_{i}\}$ and the concatenation
+$\wedge_{\text{i} \in \text{I}}\ e_{i}$ of indexed meta-level elements
+$e$ respectively. This notion is transformed into the \textsc{Haskell}
+data types above in a straightforward manner. Meta-level sets and
+sequences consist of the element $e$ and an index set. This index set
+can be at meta level, represented by an identifier, or at object
+level. Object-level index sets are encoded as simple integer
+lists. Meta-level sets and sequences with an index set at object level
+can be transformed into object-level sets and sequences by indexing
+the element $e$ accordingly.
+
+For convenience reasons it is useful to allow auxiliary functions in
+deduction rules.  Such auxiliary functions might be the lookup in a
+context or the calculation of a class attribute's type. This leads to
+the question how auxiliary functions, more precisely calls to those
+functions, can be encoded in order to use them in type rules.
+Deduction rules reason at meta level over their judgements. Thus
+potential arguments for auxiliary functions might be at meta level,
+too. So the function call needs to be deferred until all meta-level
+arguments are instantiated with a corresponding element at object
+level. Since \textsc{Haskell} evaluates lazily, an auxiliary function is
+not applied to its arguments immediately, but there is no way to
+change the arguments of such an application thunk afterwards. This
+problem can be handled by wrapping the function and its arguments in a
+certain way:
+\begin{lstlisting}
+data MetaFun b = forall a . (...) => MF (a -> Maybe b) a
+\end{lstlisting}
+The call to an auxiliary function is encoded in a simple wrapper data
+structure containing just the function and its arguments. To deal with
+varying arity and types the function will be uncurryed and the type
+variable capturing the arguments is existentially quantified. Note
+that the wrapped function has to return a \texttt{Maybe} value. This
+allows us to capture the elements of the function's domain for which
+the function is not defined, i.e., meta-level elements or type
+variables. In such cases the function returns \texttt{Nothing}. This
+gives us the possibility to determine during constraint solving
+whether a meta-level function is evaluable or not.
+
+In addition to several components to be used in a language's
+expression syntax the library supplies an implementation for types
+which covers a basic set of standard type constructs such as base
+types, type variables, function and tuple types, type constructors,
+and type schemes:
+\begin{lstlisting}
+data Ty = Bottom              -- Bottom type
+        | T Ide               -- Base type
+        | TV Ide              -- Type variable
+        | TF Ty Ty            -- Function type
+        | TT [Ty]             -- Tuple type
+        | TC Ide [Ty]         -- Type constructor
+        | TS [Ty] Ty          -- Type scheme
+        | TFun (MetaFun Ty)   -- Type function
+        | TSeq (Sequence Ty)  -- Type sequences
+        | TSet (Set Ty)       -- Type sets
+        | MT String           -- Meta-level type
+\end{lstlisting}
+The library's type definition also utilizes all the items presented so
+far and provides type sets and sequences to be used in deduction rules
+as well as meta level functions evaluating to a type.
+
+\subsection{Inference Rules}
+\label{sec:inference_rules}
+
+As part of our library we enhance the notion for constraint-based
+deduction rules to allow the user a more convenient way to define her
+type system. Instead of annotating each judgement with a constraint
+set and adding the constraints arising from the use of this rule to
+the conclusion's constraint set, e.g.,
+
+\infrule[App] { \Gamma \vdash f : T_1\ |\ C_1 \andalso
+                \Gamma \vdash e : T_2\ |\ C_2 }
+              { \Gamma \vdash (f)\, e : T\ |\
+                C_1 \cup C_2 \cup \{ T_1 = T_2 \rightarrow T \} }
+
+the arising constraints will be denotated as a premise and the
+constraint set annotated at each typing judgement will be omitted:
+
+\infrule[App] { \Gamma \vdash f : T_1 \andalso \Gamma \vdash e : T_2
+                \andalso T_1 = T_2 \rightarrow T }
+              { \Gamma \vdash (f)\, e : T }
+
+That is, each constraint given as a premise as well as the constraint
+sets of the judgement premises will be implicitly added to the
+conclusion's constraint set. This modification employs a more compact 
+way to define an inference rule even if numerous constraints arise
+from the use of this rule.
+
+Given this notation, deduction rules can be encoded in a
+straightforward manner using the following algebraic data types:
+\begin{lstlisting}
+data Judgement = forall a . (...) => J Context a Ty
+               | forall a . (...) => C (Constraint a)
+
+data Rule = Rule { premises   :: [Judgement],
+                   conclusion :: Judgement }
+\end{lstlisting}
+The data structures for judgements and constraints as well as the
+algorithms for generating and solving constraints are parametric in
+the used data type for expressions. This allows the user of our
+framework to use her own abstract syntax as long as the implementation
+fulfills certain requirements. These requirements are formulated as
+type class constraints over the existentially quantified type variable
+\texttt{a} and are omitted for readability reasons in the data type
+declarations above. We will define some of these requirements
+throughout the remainder of this section, the omitted ones are merely
+technical and do not need any further discussion.
+
+In addition to the desired genericity of the library's data structures
+and algorithms, more complex typing rules might need to reason about
+different kinds of expressions. To allow the user to define such
+inference rules, judgements are existentially quantified over their
+expressions.\footnote{ This requirement leads to the problem of
+  defining heterogenous collections in \textsc{Haskell}. Using
+  existential types yields the solution providing the most convenient
+  interface for the user of the library. }
+
+\subsection{Constraints}
+
+Wand's example action table for a simply typed lambda calculus helps
+us to determine the central constraint domain to be used when
+formalizing type systems: equality constraints over type
+expressions. In addition our library supports the use of the logical
+connectives negation, conjunction, disjunction and implication as well
+as the use of predicates. Last but not least we allow the user to
+define solvers for new constraint domains:
+\begin{lstlisting}
+type Unifier = (Bool, Substitution)
+
+data Constraint a = Eq a a
+                  | Not (Constraint a)
+                  | And (Constraint a) (Constraint a)
+                  | Or  (Constraint a) (Constraint a)
+                  | If  (Constraint a) (Constraint a)
+                  | Predicate (MetaFun Bool)
+                  | Constraint (MetaFun Unifier)
+\end{lstlisting}
+Predicates are implemented using an embedded \textsc{Haskell}
+predicate. User defined constraints are defined in a similar fashion,
+here the solver for the new constraint domain is supplied as an
+embedded function.
+
+\subsection{Rule Instantiation}
+
+The basic technique used for the instantiation of a rule is
+first-order unification~\cite{Robinson65}. A rule is instantiable if
+and only if there exists a most general unifier between the rule's
+conclusion and the current goal.
+
+Based on a given list of typing rules the constraint generation
+algorithm tries to instantiate each arising goal with one of the
+rules. If a matching rule for the current goal has been found the
+remaining rules are not checked any more. This can be described as a
+\textit{first-fit-rule-matching semantic} where the rules are
+implicitly prioritized based on their order in the list. If a matching
+rule for a subgoal has been found the rule's conclusion can be
+instantiated by applying the found unifier to it. To complete the
+instantiation of the rule the premises and constraints of the rule
+have to be instantiated, too. This task is accomplished in three
+steps: At first, all substitutions over index sets are applied to the
+rule's premises and constraints to be able to instantiate and unfold
+all meta-level sets and sequences contained in those premises and
+constraints. Secondly, the found unifier is applied to the unfolded
+judgements. At last, all remaining meta-level types are instantiated
+with fresh type variables.
+
+This rule instantiation algorithm formulates some of the technical
+requirements regarding the used abstract syntax. Object and meta-level
+versions of types and expressions have to be unifiable, the
+application of substitutions as well as the unfolding of meta-level
+sets and sequences has to be defined, the instantiation of the
+remaining meta-level types with fresh type variables has to be
+stated, and last but not least all evaluable embedded
+\textsc{Haskell} functions have to be evaluated. These requirements
+are captured in the type classes \texttt{Evaluable},
+\texttt{Substitutable}, \texttt{Instantiable}, and \texttt{Unifiable}
+and the existentially quantified type variables on the data type
+declarations for judgements, constraints, and meta-level functions are
+annotated with corresponding type class constraints.
+\begin{lstlisting}
+class Evaluable a where
+    isEvaluable :: a -> Bool
+    containsMF  :: a -> Bool
+    eval        :: a -> a
+
+class Substitutable a where
+    apply :: Substitution -> a -> a
+
+class Instantiable a where
+    unfold :: a -> a
+    indexM :: a -> Int -> a
+    instMT :: a -> TypeCheckM Substitution
+
+class Eq a => Unifiable a where
+    unify    :: a -> a -> Unifier
+    occursIn :: a -> a -> Bool
+\end{lstlisting}
+The type class \texttt{Evaluable} provides two discriminator methods
+\texttt{isEvaluable} and \texttt{containsMF} for checking whether
+elements are at object level or if they contain a wrapped up auxiliary
+function and the method \texttt{eval} which evaluates such a
+meta-level function. The class \texttt{Substitutable} captures the
+application of a substitution to an element and the class
+\texttt{Unifiable} handles unification and occurs-checks. Last but not
+least, the type class \texttt{Instantiable} defines methods for the
+unfolding of meta-level sets and sequences (\texttt{unfold}), the
+indexing of meta-level elements (\texttt{indexM}) as well as the
+instantiation of all meta-level types contained in an expression. The
+method \texttt{instMT} runs inside a state monad to be able to
+generate fresh type variables.
+
+Experienced \textsc{Haskell} programmers might object that some of
+this functionality, e.g. the evaluation of meta-level functions
+contained in an expression, the application of a substitution to an
+expression and its children respectively, the unfolding of meta-level
+sets and sequences, and the instantiation of meta-level types, could
+have been implemented as part of the library using data type generic
+programming techniques as described in \textit{Scrap your boilerplate}
+\cite{Lammel2003} or \textit{Uniplate}~\cite{Mitchell2007} instead of
+obligating the user to define it by herself. Unfortunately, the use of
+existential types for meta-level functions and judgements prevents us
+from using generic programming, since the mentioned libraries can't
+define generic functions over non-\textsc{Haskell}-98 data
+types\footnote{This limitation of nearly all generic programming
+  approaches in the \textsc{Haskell} universe is discussed in great
+  detail in Alexey Rodriguez Yakushev's PhD
+  thesis~\cite{RodriguezYakushev2009}.}.
+
+Nevertheless our library provides a mechanism to save the user from
+writing boilerplate code when defining instance declarations for the
+four type classes stated above. Given some essential properties of the
+abstract syntax, i.e., a discriminator for meta-level elements, a
+relation linking meta-level elements to its corresponding object-level
+pendants, as well as a function handling the indexing of meta-level
+elements, we can employ \textsc{Haskell}'s compile-time
+meta-pro\-gramming facilities~\cite{SheardPeytonJones02} to derive the
+instance declarations for \texttt{Evaluable}, \texttt{Substitutable},
+\texttt{Instantiable}, and \texttt{Unifiable}.
+These needed properties are covered by the type class \texttt{AST}
+\begin{lstlisting}
+class AST a where
+    index  :: a -> Int -> a
+    (~=)   :: a -> a -> Bool
+    isMeta :: a -> Bool
+\end{lstlisting}
+and by providing an instance declaration for \texttt{AST} the user can
+utilize the library's \textit{Template Haskell} functionality to
+derive the desired instance declarations for the four type classes
+capturing the requirements formulated by the constraint generation and
+the constraint solving function.
+
+\subsection{Heterogenous Substitutions}
+
+Unification plays an essential role as part of our framework since it
+is used during rule instantiation to determine the matching rule for
+an expression and during constraint solving to solve equality
+constraints. Both the rule instantiation phase and the constraint
+solver formulate some distinct requirements on the used implementation
+for substitutions and we want to discuss some of these technical
+aspects in detail.
+
+Instantiating a rule yields mappings from meta-level contexts to
+object-level contexts, from meta-level expressions to object-level
+expressions, and from meta-level types to object-level types. We want
+to capture all these mappings in one substitution and therefore define
+substitutions as heterogenous collections of homogenous mappings from
+meta-level to object-level elements.
+
+As part of our library we implement substitutions as maps from types
+to collections of homogenous mappings. Since types are not values in
+\textsc{Haskell} we use the data type for type representations
+instead:
+\begin{lstlisting}
+data S = forall a . S (Map a a)
+
+type Substitution = Map TypeRep S
+\end{lstlisting}
+Given those data structures, a substitution can be seen as a
+collection of key-value pairs where the key element hints on the type
+the mappings in the value element are ranging over. To capture the
+heterogenous nature of this collection, the homogenous mappings are
+existentially quantified again. Basic operations, such as inserting a
+meta-level/object-level mapping into a substitution, can now be
+implemented in a straightforward manner:
+\begin{lstlisting}
+insert :: a -> a -> Substitution -> Substitution
+insert k v s = insertWith addKV (typeOf k) kv s
+    where
+      kv = S (singleton k v)
+
+      addKV _ (S m) =
+          case (cast m) :: Maybe (Map a a) of
+             Just m' -> S (M.insert k v m')
+             _       -> error "Corrupt subst."
+\end{lstlisting}
+Based on the type of the mapping we determine the corresponding entry
+in the underlying map. We have to cast the wrapped up collection of
+mappings using \textsc{Haskell}'s type safe cast operator to be able
+to insert the given mapping. If mappings over the type \texttt{a} are
+not contained in the map yet, a new entry is added to the map
+containing just the given mapping.
+
+If we want to apply a substitution to an element we use the same
+pattern again:
+\begin{lstlisting}
+apply :: Substitution -> a -> a
+apply s x = maybe x (! x) (lookup (typeOf x) s)
+
+(S m) ! x = case (cast m) :: Maybe (Map a a) of
+               Just m' -> maybe x id (lookup x m')
+               Nothing -> error "Corrupt subst."
+\end{lstlisting}
+We determine if a collection of mappings of type \texttt{a} exists in
+the given substitution and lookup the corresponding value. If no
+mappings over \texttt{a} are present or \texttt{x} is not stored as a
+key in the underlying map, \texttt{apply s} results to identity.
+
+
+\subsection{Constraint Solving}
+
+The constraint solving algorithm described in
+Sec.~\ref{sec:constraint-dissolving} performs a dependency analysis on
+the input and partitions the given constraint set such that
+constraints containing auxiliary functions depending on the solution
+of another constraint can be postponed accordingly.
+
+The key question at this point is: how do we determine if an auxiliary
+function depends on the solution of another constraint? The
+constraint generation algorithm instantiates meta-level types with
+fresh type variables and the constraint solver yields a substitution
+containing mappings from type variables to types. Thus an auxiliary
+function with type variables as arguments needs to be postponed, if
+one of these type variables is bound by another constraint,
+too\footnote{To get an idea in which scenarios we benefit from this
+  dependency analysis, the reader might want take a look at the next
+  section where we present an example type system and discuss the
+  topic of type variable arguments in auxiliary functions on an
+  explicit type rule.}.
+
+This view on auxiliary functions defines one essential requirement
+regarding the implementation of the dependency analysis: we need to be
+able to determine all type variables bound by a constraint. We follow
+the strategies used so far and define a type class \texttt{Vars} which
+covers the computation of free, bound, and all type variables
+contained in an element:
+\begin{lstlisting}
+class Vars a where
+    fv :: a -> Set Ty
+    fv x  = (vs x) \\ (bv x)
+
+    bv :: a -> Set Ty
+    bv x = (vs x) \\ (fv x)
+
+    vs :: a -> Set Ty
+    vs x = (fv x) `union` (bv x)
+\end{lstlisting}
+Our library provides instance declarations for all abstract-syntax
+components described earlier, meta-level functions, types, and
+constraints. Thus the \texttt{Vars} instance declaration for the
+user's abstract syntax would just define a recursive traversal of the
+syntactical elements where all type variables are collected. Again, we
+do not obligate the user to write this boilerplate code and provide
+\textit{Template Haskell}-functionality to derive the instance
+declaration automatically.
+
+Being able to select all type variables contained in a constraint the
+dependency analysis can be implemented in a straightforward
+manner. Using the \texttt{containsMF} method of the \texttt{Evaluable}
+type class we can discriminate all constraints containing an
+auxiliary function. Given such a constraint we select the type
+variables of the auxiliary function(s) and calculate the set of type
+variables bound by all other constraints. If the intersection of these
+two sets is not empty the auxiliary function might depend on the
+solution of another constraint and the constraint containing the
+auxiliary function is postponed for later consideration.
+
+\subsection{Error Messages}
+
+For real world usage our library has to provide a mechanism to define
+adequate error messages. Until now, an ill-typed expression yields to
+the information that a certain constraint could not be solved. This
+obviously does not qualify as a useful error message and therefore our
+library provides more elaborate components for error handling.
+
+First of all it has to be stated that constraint-based type rules
+form an excellent base for defining good error messages. Each
+constraint defines a consistency condition on the expression(s) a
+type rule reasons about and the non-solvability of a constraint
+represents one possible typing error which can occur for this
+expression. Thus annotating each constraint in an inference rule with
+an error message covers all possible error cases in a quite convenient
+way.
+
+Our implementation adapts this idea in a straightforward manner
+and the data type declaration for constraints is modified such that
+each constructor is extended with an \texttt{ErrorMsg} field
+accordingly.
+
+A good error message does not only consist of a static message but
+hints on those expressions which produced the error. Since constraints
+are defined at meta level, all elements an error message could
+consider are at meta level, too. Given our implementation for
+auxiliary functions in deductions rules, error messages can be seen as
+meta-level functions evaluating to a \texttt{String}:
+\begin{lstlisting}
+data ErrorMsg = ErrorMsg (MetaFun String)
+\end{lstlisting}
+This approach yields an easy and straightforward implementation of
+error messages and fits conveniently in the strategy used so far.

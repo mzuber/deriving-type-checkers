@@ -1,0 +1,33 @@
+\begin{taplfigureT}{label=solver, caption={Constraint solving algorithm.}}
+
+{\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}l r p{5cm}@{}}
+\textbf{Input:}          & \multicolumn{2}{l}{Set of constraints $C$} \\
+                         & & \\
+                         
+\textbf{Initialization:} & $\sigma$     & = $\emptyset$ \\
+                         & $(C_1, C_2)$ & = partition $C$ \\
+\end{tabular}}
+
+\bigskip
+{\setlength{\tabcolsep}{1pt}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{l l p{9cm}}
+\textbf{Loop:}~~
+& \multicolumn{2}{l}{If $C_1 = C_2 = \emptyset$ then
+                     halt and return $\sigma$} \\
+& \multicolumn{2}{p{10cm}}{If $C_1 = \emptyset$ then
+                          apply algorithm to $C_2$ and
+                          compose arisen substitution with $\sigma$} \\
+& Otherwise: & \vspace{-15.5pt}
+               \begin{enumerate}
+               \item choose and delete a constraint $c$ from $C_1$
+               \item evaluate all auxiliary functions in $c$
+               \item solve $c$ and compose arisen
+                 substitution with $\sigma$
+               \item apply $\sigma$ to all constraints
+                 in $C_1$ and $C_2$
+              \end{enumerate} \\
+\end{tabular}}
+\vspace{-1.5em}
+\end{taplfigureT}

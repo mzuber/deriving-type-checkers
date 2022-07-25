@@ -1,0 +1,73 @@
+% settings.sty
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{settings}[2012/09/04 TR LaTeX settings]
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Packages
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\RequirePackage[utf8]{inputenc}
+\RequirePackage[T1]{fontenc}
+\RequirePackage[english]{babel}
+\RequirePackage{amsmath}
+\RequirePackage{amsfonts}
+\RequirePackage{float}
+\RequirePackage{listings}
+\RequirePackage{color}
+\RequirePackage{graphicx}
+
+\RequirePackage{Packages/bcprules}
+\RequirePackage{Packages/taplfigures}
+\RequirePackage{Packages/uebbgrammar}
+\RequirePackage{macros}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Configure listings 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\definecolor{red}{rgb}{0.6,0,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{lightgray}{rgb}{0.8,0.8,0.8}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+ 
+\lstset{ %
+  language=Haskell,                  % the language of the code
+  basicstyle=\ttfamily\footnotesize, % font used for the code
+  numbers=left,                      % where to put the line-numbers
+  numberstyle=\tiny\color{gray},     % the style that is used for the line-numbers
+  stepnumber=1,                      % the step between two line-numbers
+  numbersep=5pt,                     % how far the line-numbers are from the code
+  backgroundcolor=\color{lightgray}, % choose the background color
+  showspaces=false,                  % show spaces adding particular underscores
+  showstringspaces=false,            % underline spaces within strings
+  showtabs=false,                    % show tabs within strings adding particular underscores
+  tabsize=4,                         % sets default tabsize to 2 spaces
+  captionpos=b,                      % sets the caption-position to bottom
+  breaklines=true,                   % sets automatic line breaking
+  breakatwhitespace=false,           % sets if automatic breaks should only happen at whitespace
+  keywordstyle=\color{blue},         % keyword style
+  commentstyle=\color{red},          % comment style
+  stringstyle=\color{mauve},         % string literal style
+  escapeinside={\%*}{*)},            % if you want to add a comment within your code
+  morekeywords={Typeable},           % if you want to add more keywords to the set
+  deletekeywords={Eq, index, insert, lookup, union, null, foldr, abs,
+    const, div, and, or, exp, foldl, fromJust, mapMaybe, isNothing,
+    find, Char}
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Page layout
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setlength{\parindent}{0cm}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "article"
+%%% TeX-PDF-mode: t
+%%% coding: utf-8-unix
+%%% End: 

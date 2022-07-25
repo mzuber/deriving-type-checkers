@@ -1,0 +1,40 @@
+\begin{taplfigureT}{label=wand:mod, caption={Constraint generation algorithm.}}
+
+\quad
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l r p{7cm}}
+\textbf{Input:}          & \multicolumn{2}{l}{Term $t_0$, Set
+                           of constraint-based typing rules $R$} \\
+                         & & \\
+                         
+\textbf{Initialization:} & $E$ = & $\emptyset$ \\
+                         & $G$ = & $\{ \Gamma_0 \vdash t_0 : \tau_0 \}$,
+                                   where $\tau_0$ is a type variable and $\Gamma_0$
+                                   maps the free variables of $t_0$ to other distinct
+                                   type variables \\
+\end{tabular}
+
+\quad
+\setlength{\tabcolsep}{1pt}
+\begin{tabular}{l l p{7.5cm}}
+\textbf{Loop:}
+\quad\quad\quad	& \multicolumn{2}{l}{If $G = \emptyset$ then halt and return $E$} \\
+                &            & \\
+                & Otherwise: & \vspace{-16pt}
+                               \begin{enumerate}
+                                \item choose and delete a
+                                      subgoal $s$ from $G$
+                                \item choose the best fitting
+                                      rule for $s$ from $R$
+                                \item $s' \leftarrow$ instantiate
+                                      the chosen rule with $s$
+                                \item substitute all meta-level
+                                      types in $s'$ with fresh type
+                                      variables, add all premises in
+                                      $s'$ as new subgoals to $G$ and
+                                      add all constraints \mbox{in
+                                        $s'$ to $E$}
+                               \end{enumerate} \\
+\end{tabular}
+\vspace{-1.5em}
+\end{taplfigureT}

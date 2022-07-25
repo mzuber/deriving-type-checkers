@@ -1,0 +1,38 @@
+\begin{taplfigure}{label=fj:exp,
+                   caption={\textsc{FJ} expression typing.}}
+
+\textbf{Expression typing:}
+
+\vspace{-1em}
+
+% typing rule for variable lookup
+\infrule[Var] { T = \Gamma (x) }
+              { \Gamma \vdash x : T }
+              
+% typing rule for field lookup
+\infrule[Field] { \Gamma \vdash e_0 : C_0 \andalso T = ftype(f,C_0) }
+                { \Gamma \vdash e_{0}.f : T }
+                
+% typing rule for method invokation
+\infrule[Invk] { \Gamma \vdash e_0 : C_0 \quad
+                 \metaSeq{j \in I}{(\Gamma \vdash e_j : C_j)} \quad
+                 mtype(m,C_0) = (\metaSeq{k \in I}{D_k}) \rightarrow C \\
+                 \metaSeq{l \in I}{(C_l <: D_l)} \andalso T = C }
+               { \Gamma \vdash e_{0}.m(\metaSeq{i \in I}{e_i}) : T }
+               
+% typing rule for constructor calls
+\infrule[New] { \metaSeq{j \in I}{(\Gamma \vdash e_j : C_j)} \quad
+                fields(C) = \metaSet{k \in I}{ \{D_k\ f_k\} } \\
+                \metaSeq{l \in I}{(C_l <: D_l)} \andalso T = C }
+              { \Gamma \vdash\ \texttt{new}\ C (\metaSeq{i \in I}{e_i}) : T }
+              
+% typing rule for up-casts
+\infrule[U-Cast] { \Gamma \vdash e : D \andalso D <: C \andalso T = C }
+                 { \Gamma \vdash (C)\, e : T }
+                 
+% typing rule for down casts
+\infrule[D-Cast] { \Gamma \vdash e : D \andalso C <: D \andalso
+                    C \neq D \andalso T = C }
+                 { \Gamma \vdash (C)\, e : T }
+
+\end{taplfigure}
