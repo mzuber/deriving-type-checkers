@@ -25,7 +25,7 @@ Martin Zuber and Fabian Linges. Deriving Type Checkers. In _Technical Report 201
     number = {2012-09},
     issn = {1436-9915},
     institution = {TU Berlin},
-    url = {http://www.eecs.tu-berlin.de/fileadmin/f4/TechReports/2012/tr_2012-09.pdf}
+    url = {https://github.com/mzuber/deriving-type-checkers/releases/download/v0.3.0/TR_2012-09_Deriving_Type_Checkers.pdf}
 }
 ```
 
